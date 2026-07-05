@@ -1,0 +1,31 @@
+<title>Supplier Dashboard</title>
+<link rel="stylesheet" href="/css/style.css">
+<header class="topbar" id="topbar"></header>
+<main>
+  <div class="card">
+    <h2>Pricing Requests</h2>
+    <div id="requests-list" class="muted">Loading…</div>
+  </div>
+</main>
+<script src="/js/api.js"></script>
+<script>
+  (async () => {
+    const user = await requireRole(['supplier']);
+    if (!user) return;
+    renderTopbar(user, 'Signage Portal — Supplier');
+    await load();
+  })();
+
+  async function load() {
+    const { requests } = await api('/supplier-requests');
+    const el = document.getElementById('requests-list');
+    el.innerHTML = requests.length ? requests.map((r) => `
+      <a class="list-item" href="/supplier/request.html?id=${r.id}">
+        <div>
+          <div class="title">Quote #${r.quote_id}</div>
+          <div class="meta">Requested ${fmtDate(r.requested_at)}${r.cost_price ? ' &middot; your price ' + fmtMoney(r.cost_price) : ''}</div>
+        </div>
+        <span class="badge ${r.status}">${r.status}</span>
+      </a>`).join('') : '<p class="muted">No pricing requests yet.</p>';
+  }
+</script>

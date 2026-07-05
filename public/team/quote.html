@@ -1,0 +1,111 @@
+<title>Quote Detail — Team</title>
+<link rel="stylesheet" href="/css/style.css">
+<header class="topbar" id="topbar"></header>
+<main>
+  <p><a href="/team/dashboard.html">&larr; Back to dashboard</a></p>
+  <div class="card" id="quote-card">Loading…</div>
+
+  <div class="card">
+    <h2>Supplier Pricing Requests</h2>
+    <form id="supplier-form">
+      <label>Supplier email<input type="email" name="supplierEmail" required placeholder="supplier@example.com"></label>
+      <label>Message<input type="text" name="message" placeholder="Please quote your cost for this job"></label>
+      <div class="actions"><button class="btn secondary" type="submit">Request Supplier Price</button></div>
+      <div class="error hidden" id="supplier-error"></div>
+    </form>
+    <div id="supplier-requests" class="muted" style="margin-top:16px;">Loading…</div>
+  </div>
+
+  <div class="card">
+    <h2>Set Client Price</h2>
+    <form id="price-form">
+      <label>Internal cost ($)<input type="number" step="0.01" min="0" name="internalCost" required></label>
+      <label>Markup (%)<input type="number" step="0.1" min="0" name="markupPercent" required value="30"></label>
+      <div class="actions"><button class="btn" type="submit">Save Pricing</button></div>
+      <div class="error hidden" id="price-error"></div>
+    </form>
+  </div>
+
+  <div class="card hidden" id="convert-card">
+    <h2>Convert to Project</h2>
+    <p class="muted">The client has accepted this quote. Convert it into a 7-stage project.</p>
+    <button class="btn" id="convert-btn">Convert to Project</button>
+  </div>
+</main>
+<script src="/js/api.js"></script>
+<script>
+  const quoteId = qs('id');
+  (async () => {
+    const user = await requireRole(['team']);
+    if (!user) return;
+    renderTopbar(user, 'Signage Portal — Team');
+    await load();
+  })();
+
+  async function load() {
+    const { quote } = await api('/quotes/' + quoteId);
+    document.getElementById('quote-card').innerHTML = `
+      <h2>${escapeHtml(quote.title)} <span class="badge ${quote.status}">${quote.status}</span></h2>
+      <p class="muted">${escapeHtml(quote.description || '')}</p>
+      <p><strong>Quantity:</strong> ${quote.quantity}</p>
+      <p><strong>Internal cost:</strong> ${fmtMoney(quote.internal_cost)} &middot; <strong>Markup:</strong> ${quote.internal_markup_percent != null ? quote.internal_markup_percent + '%' : '—'}</p>
+      <p><strong>Client price:</strong> ${fmtMoney(quote.client_price)}</p>
+    `;
+    document.getElementById('convert-card').classList.toggle('hidden', quote.status !== 'accepted');
+    await loadSupplierRequests();
+  }
+
+  async function loadSupplierRequests() {
+    const { requests } = await api('/supplier-requests?quoteId=' + quoteId);
+    const el = document.getElementById('supplier-requests');
+    el.innerHTML = requests.length ? `<table>
+      <thead><tr><th>Status</th><th>Cost Price</th><th>Notes</th><th>Requested</th></tr></thead>
+      <tbody>${requests.map((r) => `<tr>
+        <td><span class="badge ${r.status}">${r.status}</span></td>
+        <td>${fmtMoney(r.cost_price)}</td>
+        <td>${escapeHtml(r.notes || '')}</td>
+        <td>${fmtDate(r.requested_at)}</td>
+      </tr>`).join('')}</tbody>
+    </table>` : '<p class="muted">No supplier requests yet.</p>';
+  }
+
+  document.getElementById('supplier-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const errorEl = document.getElementById('supplier-error');
+    errorEl.classList.add('hidden');
+    try {
+      await api('/supplier-requests', {
+        method: 'POST',
+        body: { quoteId, supplierEmail: form.get('supplierEmail'), message: form.get('message') },
+      });
+      e.target.reset();
+      await loadSupplierRequests();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
+
+  document.getElementById('price-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const errorEl = document.getElementById('price-error');
+    errorEl.classList.add('hidden');
+    try {
+      await api('/quotes/' + quoteId, {
+        method: 'PATCH',
+        body: { action: 'price', internalCost: Number(form.get('internalCost')), markupPercent: Number(form.get('markupPercent')) },
+      });
+      await load();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
+
+  document.getElementById('convert-btn').addEventListener('click', async () => {
+    const { project } = await api('/projects', { method: 'POST', body: { quoteId } });
+    window.location.href = '/team/project.html?id=' + project.id;
+  });
+</script>

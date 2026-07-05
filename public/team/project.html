@@ -1,0 +1,138 @@
+<title>Project Detail — Team</title>
+<link rel="stylesheet" href="/css/style.css">
+<header class="topbar" id="topbar"></header>
+<main>
+  <p><a href="/team/dashboard.html">&larr; Back to dashboard</a></p>
+  <div class="card" id="project-header">Loading…</div>
+
+  <div class="card">
+    <h2>Timeline</h2>
+    <ul class="timeline" id="timeline"></ul>
+  </div>
+
+  <div class="card">
+    <h2>Photos</h2>
+    <form id="photo-form">
+      <label>Photo<input type="file" name="photo" accept="image/*" required></label>
+      <label>Caption<input type="text" name="caption" placeholder="Optional caption"></label>
+      <div class="actions"><button class="btn secondary" type="submit">Upload Photo</button></div>
+      <div class="error hidden" id="photo-error"></div>
+    </form>
+    <div class="photo-grid" id="photo-grid" style="margin-top:16px;"></div>
+  </div>
+
+  <div class="card">
+    <h2>Questions &amp; Answers</h2>
+    <div class="qna-thread" id="qna-thread"></div>
+    <form id="qna-form">
+      <textarea name="message" rows="2" placeholder="Reply to the client..." required></textarea>
+      <div class="actions"><button class="btn" type="submit">Send</button></div>
+    </form>
+  </div>
+</main>
+<script src="/js/api.js"></script>
+<script>
+  const projectId = qs('id');
+  let currentUser;
+  let stages = [];
+
+  (async () => {
+    currentUser = await requireRole(['team']);
+    if (!currentUser) return;
+    renderTopbar(currentUser, 'Signage Portal — Team');
+    await loadProject();
+    await loadPhotos();
+    await loadQna();
+  })();
+
+  async function loadProject() {
+    const { project } = await api('/projects/' + projectId);
+    stages = project.stages;
+    document.getElementById('project-header').innerHTML = `
+      <h2>${escapeHtml(project.title)}</h2>
+      <p><strong>Client price:</strong> ${fmtMoney(project.client_price)}</p>
+    `;
+    renderTimeline();
+  }
+
+  function renderTimeline() {
+    document.getElementById('timeline').innerHTML = stages.map((s) => `
+      <li class="${s.status}">
+        <span class="dot">${s.status === 'complete' ? '✓' : s.stage_number}</span>
+        <div style="flex:1;">
+          <div><strong>${escapeHtml(s.name)}</strong> <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span></div>
+          <div class="meta muted">${s.completed_at ? 'Completed ' + fmtDate(s.completed_at) : s.started_at ? 'Started ' + fmtDate(s.started_at) : ''}</div>
+        </div>
+        <div>
+          ${s.status !== 'in_progress' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="in_progress">Start</button>` : ''}
+          ${s.status !== 'complete' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="complete">Complete</button>` : ''}
+        </div>
+      </li>`).join('');
+
+    document.querySelectorAll('#timeline button').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await api('/projects/' + projectId, {
+          method: 'PATCH',
+          body: { stageNumber: Number(btn.dataset.stage), status: btn.dataset.status },
+        });
+        await loadProject();
+      });
+    });
+  }
+
+  async function loadPhotos() {
+    const { photos } = await api('/photos?projectId=' + projectId);
+    const el = document.getElementById('photo-grid');
+    el.innerHTML = photos.length
+      ? photos.map((p) => `<img src="/api/photo-file/${p.blob_key}" alt="${escapeHtml(p.caption || '')}" title="${escapeHtml(p.caption || '')}">`).join('')
+      : '<p class="muted">No photos uploaded yet.</p>';
+  }
+
+  function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  document.getElementById('photo-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const file = form.get('photo');
+    const errorEl = document.getElementById('photo-error');
+    errorEl.classList.add('hidden');
+    try {
+      const dataBase64 = await readFileAsBase64(file);
+      await api('/photos', {
+        method: 'POST',
+        body: { projectId, filename: file.name, contentType: file.type, dataBase64, caption: form.get('caption') },
+      });
+      e.target.reset();
+      await loadPhotos();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
+
+  async function loadQna() {
+    const { messages } = await api('/qna?projectId=' + projectId);
+    const el = document.getElementById('qna-thread');
+    el.innerHTML = messages.map((m) => `
+      <div class="qna-msg ${m.sender_id === currentUser.id ? 'mine' : ''}">
+        <div class="meta">${escapeHtml(m.sender_name)} (${m.sender_role}) &middot; ${fmtDate(m.created_at)}</div>
+        <div>${escapeHtml(m.message)}</div>
+      </div>`).join('') || '<p class="muted">No messages yet.</p>';
+    el.scrollTop = el.scrollHeight;
+  }
+
+  document.getElementById('qna-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    await api('/qna', { method: 'POST', body: { projectId, message: form.get('message') } });
+    e.target.reset();
+    await loadQna();
+  });
+</script>
