@@ -1,8 +1,8 @@
 const { getStore } = require('@netlify/blobs');
 const { query } = require('./utils/db');
-const { getUserFromEvent, getIdFromPath } = require('./utils/auth');
+const { getUserFromEvent, getIdFromPath, withErrorHandling } = require('./utils/auth');
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return { statusCode: 401, body: 'Not authenticated' };
 
@@ -32,4 +32,4 @@ exports.handler = async (event) => {
     body: Buffer.from(blob).toString('base64'),
     isBase64Encoded: true,
   };
-};
+});

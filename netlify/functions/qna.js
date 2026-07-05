@@ -1,5 +1,5 @@
 const { query } = require('./utils/db');
-const { getUserFromEvent, json } = require('./utils/auth');
+const { getUserFromEvent, json, withErrorHandling } = require('./utils/auth');
 
 async function assertProjectAccess(user, projectId) {
   const result = await query('SELECT * FROM projects WHERE id = $1', [projectId]);
@@ -53,7 +53,7 @@ async function postMessage(user, event) {
   return json(201, { message: { ...result.rows[0], sender_name: user.name, sender_role: user.role } });
 }
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return json(401, { error: 'Not authenticated' });
 
@@ -61,4 +61,4 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'POST') return postMessage(user, event);
 
   return json(405, { error: 'Method not allowed' });
-};
+});

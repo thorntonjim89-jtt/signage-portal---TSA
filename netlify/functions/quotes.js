@@ -1,5 +1,5 @@
 const { query } = require('./utils/db');
-const { getUserFromEvent, json, getIdFromPath } = require('./utils/auth');
+const { getUserFromEvent, json, getIdFromPath, withErrorHandling } = require('./utils/auth');
 
 // SECURITY: this is a whitelist, not a blacklist. A supplier's cost price
 // (internal_cost) and the markup applied on top of it (internal_markup_percent)
@@ -166,7 +166,7 @@ async function updateQuote(user, id, event) {
   return json(400, { error: 'Unsupported action' });
 }
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return json(401, { error: 'Not authenticated' });
 
@@ -178,4 +178,4 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'PATCH' && id) return updateQuote(user, id, event);
 
   return json(405, { error: 'Method not allowed' });
-};
+});

@@ -1,7 +1,7 @@
 const { getStore } = require('@netlify/blobs');
 const { randomUUID } = require('crypto');
 const { query } = require('./utils/db');
-const { getUserFromEvent, json } = require('./utils/auth');
+const { getUserFromEvent, json, withErrorHandling } = require('./utils/auth');
 
 const MAX_BYTES = 8 * 1024 * 1024;
 
@@ -68,7 +68,7 @@ async function uploadPhoto(user, event) {
   return json(201, { photo: result.rows[0] });
 }
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return json(401, { error: 'Not authenticated' });
 
@@ -76,4 +76,4 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'POST') return uploadPhoto(user, event);
 
   return json(405, { error: 'Method not allowed' });
-};
+});

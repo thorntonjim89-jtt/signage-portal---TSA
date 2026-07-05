@@ -1,6 +1,6 @@
-const { json, clearSessionCookie } = require('./utils/auth');
+const { json, clearSessionCookie, withErrorHandling } = require('./utils/auth');
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   if (event.httpMethod !== 'POST') {
     return json(405, { error: 'Method not allowed' });
   }
@@ -13,4 +13,4 @@ exports.handler = async (event) => {
     },
     body: JSON.stringify({ ok: true }),
   };
-};
+});
