@@ -1,8 +1,8 @@
 const bcrypt = require('bcryptjs');
 const { query } = require('./utils/db');
-const { json, signToken, setSessionCookie } = require('./utils/auth');
+const { json, signToken, setSessionCookie, withErrorHandling } = require('./utils/auth');
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   if (event.httpMethod !== 'POST') {
     return json(405, { error: 'Method not allowed' });
   }
@@ -42,4 +42,4 @@ exports.handler = async (event) => {
       user: { id: user.id, email: user.email, name: user.name, role: user.role },
     }),
   };
-};
+});

@@ -1,12 +1,12 @@
 const bcrypt = require('bcryptjs');
 const { query } = require('./utils/db');
-const { json } = require('./utils/auth');
+const { json, withErrorHandling } = require('./utils/auth');
 
 // Team/staff accounts are never self-registered — they're seeded directly in
 // the database (see schema.sql) or created by an existing team member later.
 const SELF_REGISTERABLE_ROLES = ['client', 'supplier'];
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   if (event.httpMethod !== 'POST') {
     return json(405, { error: 'Method not allowed' });
   }
@@ -47,4 +47,4 @@ exports.handler = async (event) => {
   );
 
   return json(201, { user: result.rows[0] });
-};
+});

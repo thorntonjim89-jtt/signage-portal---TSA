@@ -1,5 +1,5 @@
 const { query } = require('./utils/db');
-const { getUserFromEvent, json, getIdFromPath } = require('./utils/auth');
+const { getUserFromEvent, json, getIdFromPath, withErrorHandling } = require('./utils/auth');
 
 const STAGE_NAMES = [
   'Order Confirmed',
@@ -137,7 +137,7 @@ async function updateStage(user, id, event) {
   return json(200, { stage: result.rows[0] });
 }
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return json(401, { error: 'Not authenticated' });
 
@@ -149,4 +149,4 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'PATCH' && id) return updateStage(user, id, event);
 
   return json(405, { error: 'Method not allowed' });
-};
+});

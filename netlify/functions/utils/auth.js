@@ -66,6 +66,21 @@ function getIdFromPath(event, functionName) {
   return rest.length ? decodeURIComponent(rest.join('/')) : null;
 }
 
+// Without this, an unhandled rejection (e.g. a bad DATABASE_URL, a dropped
+// DB connection) crashes the Lambda invocation and Netlify's proxy returns
+// an opaque 502 with no indication of what actually went wrong. Wrapping
+// every handler turns that into a normal JSON 500 with the real message.
+function withErrorHandling(handler) {
+  return async (event, context) => {
+    try {
+      return await handler(event, context);
+    } catch (error) {
+      console.error(error);
+      return json(500, { error: error.message || 'Internal server error' });
+    }
+  };
+}
+
 module.exports = {
   COOKIE_NAME,
   signToken,
@@ -74,4 +89,5 @@ module.exports = {
   clearSessionCookie,
   json,
   getIdFromPath,
+  withErrorHandling,
 };

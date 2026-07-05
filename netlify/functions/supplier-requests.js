@@ -1,5 +1,5 @@
 const { query } = require('./utils/db');
-const { getUserFromEvent, json, getIdFromPath } = require('./utils/auth');
+const { getUserFromEvent, json, getIdFromPath, withErrorHandling } = require('./utils/auth');
 
 // SECURITY: cost prices live only in this endpoint and are only ever
 // returned to 'team' (who sets the markup) or the owning 'supplier' (their
@@ -122,7 +122,7 @@ async function respondToRequest(user, id, event) {
   return json(200, { request: sanitizeRequest(result.rows[0], user) });
 }
 
-exports.handler = async (event) => {
+exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return json(401, { error: 'Not authenticated' });
 
@@ -139,4 +139,4 @@ exports.handler = async (event) => {
   if (event.httpMethod === 'PATCH' && id) return respondToRequest(user, id, event);
 
   return json(405, { error: 'Method not allowed' });
-};
+});
