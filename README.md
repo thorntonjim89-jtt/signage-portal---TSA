@@ -148,3 +148,11 @@ public/                    Static frontend (no build step)
   client/, team/, supplier/  Role-specific dashboards and detail pages
 schema.sql                 Postgres schema + seed team account
 ```
+
+## Known limitations / possible future work
+
+- **No email notifications.** Registration, quote pricing, stage updates, and
+  new Q&A messages don't trigger any email — the app is purely in-app/UI
+  driven right now. Adding email (e.g. via Resend or Postmark) for things
+  like "your quote has been priced" or a welcome message on signup would be
+  a natural next feature.
