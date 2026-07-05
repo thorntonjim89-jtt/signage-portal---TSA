@@ -1,0 +1,97 @@
+<title>Signage Portal — Sign In</title>
+<link rel="stylesheet" href="/css/style.css">
+<main style="max-width:420px;">
+  <h1>Signage Portal</h1>
+
+  <div class="tabs">
+    <button id="tab-login" class="active">Log In</button>
+    <button id="tab-register">Create Account</button>
+  </div>
+
+  <div class="card" id="login-card">
+    <h2>Log in</h2>
+    <form id="login-form">
+      <label>Email<input type="email" name="email" required></label>
+      <label>Password<input type="password" name="password" required></label>
+      <div class="actions"><button class="btn" type="submit">Log In</button></div>
+      <div class="error hidden" id="login-error"></div>
+    </form>
+    <p class="muted" style="margin-top:16px;">Team accounts are created by staff, not self-registered. Demo team login: <code>team@example.com</code> / <code>TeamDemo123!</code></p>
+  </div>
+
+  <div class="card hidden" id="register-card">
+    <h2>Create an account</h2>
+    <form id="register-form">
+      <label>I am a
+        <select name="role">
+          <option value="client">Client</option>
+          <option value="supplier">Supplier</option>
+        </select>
+      </label>
+      <label>Name<input type="text" name="name" required></label>
+      <label>Company name (optional)<input type="text" name="companyName"></label>
+      <label>Email<input type="email" name="email" required></label>
+      <label>Password<input type="password" name="password" minlength="8" required></label>
+      <div class="actions"><button class="btn" type="submit">Create Account</button></div>
+      <div class="error hidden" id="register-error"></div>
+    </form>
+  </div>
+</main>
+<script src="/js/api.js"></script>
+<script>
+  document.getElementById('tab-login').addEventListener('click', () => switchTab('login'));
+  document.getElementById('tab-register').addEventListener('click', () => switchTab('register'));
+
+  function switchTab(tab) {
+    document.getElementById('tab-login').classList.toggle('active', tab === 'login');
+    document.getElementById('tab-register').classList.toggle('active', tab === 'register');
+    document.getElementById('login-card').classList.toggle('hidden', tab !== 'login');
+    document.getElementById('register-card').classList.toggle('hidden', tab !== 'register');
+  }
+
+  document.getElementById('login-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const errorEl = document.getElementById('login-error');
+    errorEl.classList.add('hidden');
+    try {
+      const { user } = await api('/auth-login', {
+        method: 'POST',
+        body: { email: form.get('email'), password: form.get('password') },
+      });
+      window.location.href = homeFor(user.role);
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
+
+  document.getElementById('register-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const errorEl = document.getElementById('register-error');
+    errorEl.classList.add('hidden');
+    try {
+      await api('/auth-register', {
+        method: 'POST',
+        body: {
+          role: form.get('role'),
+          name: form.get('name'),
+          companyName: form.get('companyName'),
+          email: form.get('email'),
+          password: form.get('password'),
+        },
+      });
+      const { user } = await api('/auth-login', {
+        method: 'POST',
+        body: { email: form.get('email'), password: form.get('password') },
+      });
+      window.location.href = homeFor(user.role);
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
+
+  api('/me').then((data) => { window.location.href = homeFor(data.user.role); }).catch(() => {});
+</script>

@@ -1,0 +1,78 @@
+<title>Pricing Request</title>
+<link rel="stylesheet" href="/css/style.css">
+<header class="topbar" id="topbar"></header>
+<main>
+  <p><a href="/supplier/dashboard.html">&larr; Back to dashboard</a></p>
+  <div class="card" id="request-card">Loading…</div>
+  <div class="card" id="quote-card"></div>
+</main>
+<script src="/js/api.js"></script>
+<script>
+  const requestId = qs('id');
+  let quoteId;
+
+  (async () => {
+    const user = await requireRole(['supplier']);
+    if (!user) return;
+    renderTopbar(user, 'Signage Portal — Supplier');
+    await load();
+  })();
+
+  async function load() {
+    const { requests } = await api('/supplier-requests');
+    const request = requests.find((r) => String(r.id) === String(requestId));
+    if (!request) {
+      document.getElementById('request-card').innerHTML = '<p class="error">Request not found.</p>';
+      return;
+    }
+    quoteId = request.quote_id;
+
+    const { quote } = await api('/quotes/' + quoteId);
+    document.getElementById('quote-card').innerHTML = `
+      <h2>${escapeHtml(quote.title)}</h2>
+      <p class="muted">${escapeHtml(quote.description || '')}</p>
+      <p><strong>Quantity:</strong> ${quote.quantity}</p>
+    `;
+
+    const formHtml = request.status === 'requested' ? `
+      <form id="price-form">
+        <label>Your cost price ($)<input type="number" step="0.01" min="0" name="costPrice" required></label>
+        <label>Notes<textarea name="notes" rows="2"></textarea></label>
+        <div class="actions">
+          <button class="btn" type="submit">Submit Price</button>
+          <button class="btn secondary" type="button" id="decline-btn">Decline</button>
+        </div>
+        <div class="error hidden" id="price-error"></div>
+      </form>
+    ` : `<p>You submitted: <strong>${fmtMoney(request.cost_price)}</strong></p><p class="muted">${escapeHtml(request.notes || '')}</p>`;
+
+    document.getElementById('request-card').innerHTML = `
+      <h2>Pricing Request <span class="badge ${request.status}">${request.status}</span></h2>
+      <p class="muted">${escapeHtml(request.message || '')}</p>
+      ${formHtml}
+    `;
+
+    if (document.getElementById('price-form')) {
+      document.getElementById('price-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = new FormData(e.target);
+        const errorEl = document.getElementById('price-error');
+        errorEl.classList.add('hidden');
+        try {
+          await api('/supplier-requests/' + requestId, {
+            method: 'PATCH',
+            body: { costPrice: Number(form.get('costPrice')), notes: form.get('notes') },
+          });
+          await load();
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.classList.remove('hidden');
+        }
+      });
+      document.getElementById('decline-btn').addEventListener('click', async () => {
+        await api('/supplier-requests/' + requestId, { method: 'PATCH', body: { action: 'decline' } });
+        await load();
+      });
+    }
+  }
+</script>

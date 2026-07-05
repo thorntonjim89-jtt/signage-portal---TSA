@@ -1,0 +1,81 @@
+<title>My Quotes &amp; Projects</title>
+<link rel="stylesheet" href="/css/style.css">
+<header class="topbar" id="topbar"></header>
+<main>
+  <div class="card">
+    <h2>Request a new quote</h2>
+    <form id="quote-form">
+      <label>Title<input type="text" name="title" required placeholder="e.g. Storefront illuminated sign"></label>
+      <label>Description<textarea name="description" rows="3" placeholder="Size, material, mounting, deadline..."></textarea></label>
+      <label>Quantity<input type="number" name="quantity" value="1" min="1"></label>
+      <div class="actions"><button class="btn" type="submit">Submit Request</button></div>
+      <div class="error hidden" id="quote-error"></div>
+    </form>
+  </div>
+
+  <div class="card">
+    <h2>My Quotes</h2>
+    <div id="quotes-list" class="muted">Loading…</div>
+  </div>
+
+  <div class="card">
+    <h2>My Projects</h2>
+    <div id="projects-list" class="muted">Loading…</div>
+  </div>
+</main>
+<script src="/js/api.js"></script>
+<script>
+  (async () => {
+    const user = await requireRole(['client']);
+    if (!user) return;
+    renderTopbar(user, 'Signage Portal');
+    await loadQuotes();
+    await loadProjects();
+  })();
+
+  async function loadQuotes() {
+    const { quotes } = await api('/quotes');
+    const el = document.getElementById('quotes-list');
+    if (!quotes.length) { el.innerHTML = '<p class="muted">No quote requests yet.</p>'; return; }
+    el.innerHTML = quotes.map((q) => `
+      <a class="list-item" href="/client/quote.html?id=${q.id}">
+        <div>
+          <div class="title">${escapeHtml(q.title)}</div>
+          <div class="meta">Requested ${fmtDate(q.created_at)}${q.client_price ? ' &middot; ' + fmtMoney(q.client_price) : ''}</div>
+        </div>
+        <span class="badge ${q.status}">${q.status}</span>
+      </a>`).join('');
+  }
+
+  async function loadProjects() {
+    const { projects } = await api('/projects');
+    const el = document.getElementById('projects-list');
+    if (!projects.length) { el.innerHTML = '<p class="muted">No active projects yet.</p>'; return; }
+    el.innerHTML = projects.map((p) => `
+      <a class="list-item" href="/client/project.html?id=${p.id}">
+        <div>
+          <div class="title">${escapeHtml(p.title)}</div>
+          <div class="meta">Stage ${p.current_stage} of 7</div>
+        </div>
+        <span class="badge in_progress">In progress</span>
+      </a>`).join('');
+  }
+
+  document.getElementById('quote-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const errorEl = document.getElementById('quote-error');
+    errorEl.classList.add('hidden');
+    try {
+      await api('/quotes', {
+        method: 'POST',
+        body: { title: form.get('title'), description: form.get('description'), quantity: Number(form.get('quantity')) || 1 },
+      });
+      e.target.reset();
+      await loadQuotes();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
+</script>

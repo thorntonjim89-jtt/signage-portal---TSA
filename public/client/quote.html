@@ -1,0 +1,60 @@
+<title>Quote Detail</title>
+<link rel="stylesheet" href="/css/style.css">
+<header class="topbar" id="topbar"></header>
+<main>
+  <p><a href="/client/dashboard.html">&larr; Back to dashboard</a></p>
+  <div class="card" id="quote-card">Loading…</div>
+</main>
+<script src="/js/api.js"></script>
+<script>
+  const quoteId = qs('id');
+  (async () => {
+    const user = await requireRole(['client']);
+    if (!user) return;
+    renderTopbar(user, 'Signage Portal');
+    await load();
+  })();
+
+  async function load() {
+    const { quote } = await api('/quotes/' + quoteId);
+    const el = document.getElementById('quote-card');
+    const actions = quote.status === 'priced'
+      ? `<div class="actions">
+           <button class="btn" id="accept-btn">Accept Quote</button>
+           <button class="btn danger" id="decline-btn">Decline</button>
+         </div>`
+      : '';
+    const priceLine = quote.client_price
+      ? `<p><strong>Price:</strong> ${fmtMoney(quote.client_price)}</p>`
+      : '<p class="muted">Pricing in progress — we will notify you once it is ready.</p>';
+    const projectLink = quote.status === 'converted'
+      ? '<p><a href="/client/dashboard.html">This quote is now a project — view it from your dashboard.</a></p>'
+      : '';
+
+    el.innerHTML = `
+      <h2>${escapeHtml(quote.title)} <span class="badge ${quote.status}">${quote.status}</span></h2>
+      <p class="muted">${escapeHtml(quote.description || '')}</p>
+      <p><strong>Quantity:</strong> ${quote.quantity}</p>
+      ${priceLine}
+      ${projectLink}
+      ${actions}
+      <div class="error hidden" id="quote-error"></div>
+    `;
+
+    if (document.getElementById('accept-btn')) {
+      document.getElementById('accept-btn').addEventListener('click', () => respond('accept'));
+      document.getElementById('decline-btn').addEventListener('click', () => respond('decline'));
+    }
+  }
+
+  async function respond(action) {
+    try {
+      await api('/quotes/' + quoteId, { method: 'PATCH', body: { action } });
+      await load();
+    } catch (err) {
+      const errorEl = document.getElementById('quote-error');
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  }
+</script>

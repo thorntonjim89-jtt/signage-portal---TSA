@@ -1,0 +1,50 @@
+<title>Team Dashboard</title>
+<link rel="stylesheet" href="/css/style.css">
+<header class="topbar" id="topbar"></header>
+<main>
+  <div class="card">
+    <h2>All Quotes</h2>
+    <div id="quotes-list" class="muted">Loading…</div>
+  </div>
+
+  <div class="card">
+    <h2>All Projects</h2>
+    <div id="projects-list" class="muted">Loading…</div>
+  </div>
+</main>
+<script src="/js/api.js"></script>
+<script>
+  (async () => {
+    const user = await requireRole(['team']);
+    if (!user) return;
+    renderTopbar(user, 'Signage Portal — Team');
+    await loadQuotes();
+    await loadProjects();
+  })();
+
+  async function loadQuotes() {
+    const { quotes } = await api('/quotes');
+    const el = document.getElementById('quotes-list');
+    el.innerHTML = quotes.length ? quotes.map((q) => `
+      <a class="list-item" href="/team/quote.html?id=${q.id}">
+        <div>
+          <div class="title">${escapeHtml(q.title)}</div>
+          <div class="meta">Requested ${fmtDate(q.created_at)}${q.client_price ? ' &middot; client price ' + fmtMoney(q.client_price) : ''}</div>
+        </div>
+        <span class="badge ${q.status}">${q.status}</span>
+      </a>`).join('') : '<p class="muted">No quotes yet.</p>';
+  }
+
+  async function loadProjects() {
+    const { projects } = await api('/projects');
+    const el = document.getElementById('projects-list');
+    el.innerHTML = projects.length ? projects.map((p) => `
+      <a class="list-item" href="/team/project.html?id=${p.id}">
+        <div>
+          <div class="title">${escapeHtml(p.title)}</div>
+          <div class="meta">Stage ${p.current_stage} of 7</div>
+        </div>
+        <span class="badge in_progress">In progress</span>
+      </a>`).join('') : '<p class="muted">No projects yet.</p>';
+  }
+</script>

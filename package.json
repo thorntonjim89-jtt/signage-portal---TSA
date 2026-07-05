@@ -1,0 +1,16 @@
+{
+  "name": "signage-portal-tsa",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Client portal for signage quotes, projects, photos and Q&A.",
+  "scripts": {
+    "dev": "npx netlify dev",
+    "db:migrate": "psql \"$DATABASE_URL\" -f schema.sql"
+  },
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0",
+    "bcryptjs": "^2.4.3",
+    "jsonwebtoken": "^9.0.2",
+    "pg": "^8.13.1"
+  }
+}
