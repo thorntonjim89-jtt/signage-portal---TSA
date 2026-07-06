@@ -98,9 +98,27 @@
   async function loadPhotos() {
     const { photos } = await api('/photos?projectId=' + projectId);
     const el = document.getElementById('photo-grid');
-    el.innerHTML = photos.length
-      ? photos.map((p) => `<img src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}" title="${escapeHtml(p.caption || '')}">`).join('')
-      : '<p class="muted">No photos uploaded yet.</p>';
+    if (!photos.length) {
+      el.innerHTML = '<p class="muted">No photos uploaded yet.</p>';
+      return;
+    }
+    const groups = new Map();
+    photos.forEach((p) => {
+      const day = fmtDateOnly(p.created_at);
+      if (!groups.has(day)) groups.set(day, []);
+      groups.get(day).push(p);
+    });
+    el.innerHTML = Array.from(groups.entries()).map(([day, items]) => `
+      <div class="photo-day">
+        <h3 class="photo-day-heading">${escapeHtml(day)}</h3>
+        <div class="photo-grid">
+          ${items.map((p) => `
+            <a class="photo-thumb" href="/api/photo-file/${p.id}" target="_blank">
+              <img src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}">
+              ${p.caption ? `<span class="photo-caption">${escapeHtml(p.caption)}</span>` : ''}
+            </a>`).join('')}
+        </div>
+      </div>`).join('');
   }
 
   document.getElementById('photo-form').addEventListener('submit', async (e) => {
