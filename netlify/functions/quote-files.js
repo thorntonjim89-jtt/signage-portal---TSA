@@ -1,7 +1,11 @@
 const { query } = require('./utils/db');
 const { getUserFromEvent, json, withErrorHandling } = require('./utils/auth');
 
-const MAX_BYTES = 8 * 1024 * 1024;
+// Netlify Functions cap the incoming request body at ~6MB, and base64
+// encoding inflates a file by ~33% before it ever reaches this code. Staying
+// well under that means an oversized file gets our own clear 413 message
+// instead of an opaque platform-level failure.
+const MAX_BYTES = 4 * 1024 * 1024;
 
 async function assertQuoteAccess(user, quoteId) {
   const result = await query('SELECT * FROM quotes WHERE id = $1', [quoteId]);
@@ -53,7 +57,7 @@ async function uploadFile(user, event) {
 
   const buffer = Buffer.from(dataBase64, 'base64');
   if (buffer.length > MAX_BYTES) {
-    return json(413, { error: 'File exceeds the 8MB upload limit' });
+    return json(413, { error: 'File exceeds the 4MB upload limit' });
   }
 
   const result = await query(
