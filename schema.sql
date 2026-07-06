@@ -8,6 +8,10 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT NOT NULL,
   role TEXT NOT NULL CHECK (role IN ('client', 'team', 'supplier')),
   company_name TEXT,
+  -- Client/supplier self-registrations start 'pending' and can't log in
+  -- until a team member approves them (see auth-register.js/auth-login.js).
+  -- Team accounts are inserted directly and default to 'approved'.
+  status TEXT NOT NULL DEFAULT 'approved' CHECK (status IN ('pending', 'approved', 'rejected')),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
