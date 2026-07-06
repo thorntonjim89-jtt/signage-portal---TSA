@@ -107,6 +107,11 @@ function fmtDate(value) {
   return new Date(value).toLocaleString();
 }
 
+function fmtDateOnly(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString();
+}
+
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
