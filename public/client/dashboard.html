@@ -10,7 +10,8 @@
       <label>Description<textarea name="description" rows="3" placeholder="Size, material, mounting, deadline..."></textarea></label>
       <label>Quantity<input type="number" name="quantity" value="1" min="1"></label>
       <label>Attach files (optional)<input type="file" name="files" multiple></label>
-      <div class="actions"><button class="btn" type="submit">Submit Request</button></div>
+      <div class="actions"><button class="btn" type="submit" id="quote-submit-btn">Submit Request</button></div>
+      <p class="success-text hidden" id="quote-success">Quote request sent — you'll see it below once it's priced.</p>
       <div class="error hidden" id="quote-error"></div>
     </form>
   </div>
@@ -79,7 +80,12 @@
     const form = new FormData(e.target);
     const files = document.querySelector('input[name=files]').files;
     const errorEl = document.getElementById('quote-error');
+    const successEl = document.getElementById('quote-success');
+    const submitBtn = document.getElementById('quote-submit-btn');
     errorEl.classList.add('hidden');
+    successEl.classList.add('hidden');
+    submitBtn.disabled = true;
+    submitBtn.textContent = 'Submitting…';
     try {
       const { quote } = await api('/quotes', {
         method: 'POST',
@@ -93,10 +99,14 @@
         });
       }
       e.target.reset();
+      successEl.classList.remove('hidden');
       await loadQuotes();
     } catch (err) {
       errorEl.textContent = err.message;
       errorEl.classList.remove('hidden');
+    } finally {
+      submitBtn.disabled = false;
+      submitBtn.textContent = 'Submit Request';
     }
   });
 </script>
