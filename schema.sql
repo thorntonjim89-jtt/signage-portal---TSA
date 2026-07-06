@@ -69,11 +69,13 @@ CREATE TABLE IF NOT EXISTS project_stages (
   UNIQUE (project_id, stage_number)
 );
 
+-- File bytes live directly in Postgres (not Netlify Blobs) so uploads don't
+-- depend on Netlify's blob storage being provisioned for the site.
 CREATE TABLE IF NOT EXISTS photos (
   id SERIAL PRIMARY KEY,
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   uploaded_by INTEGER NOT NULL REFERENCES users(id),
-  blob_key TEXT NOT NULL UNIQUE,
+  file_data BYTEA NOT NULL,
   content_type TEXT NOT NULL,
   caption TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -83,7 +85,7 @@ CREATE TABLE IF NOT EXISTS quote_attachments (
   id SERIAL PRIMARY KEY,
   quote_id INTEGER NOT NULL REFERENCES quotes(id) ON DELETE CASCADE,
   uploaded_by INTEGER NOT NULL REFERENCES users(id),
-  blob_key TEXT NOT NULL UNIQUE,
+  file_data BYTEA NOT NULL,
   filename TEXT NOT NULL,
   content_type TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -108,7 +110,7 @@ CREATE TABLE IF NOT EXISTS project_issues (
   reported_by INTEGER NOT NULL REFERENCES users(id),
   description TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')),
-  blob_key TEXT UNIQUE,
+  file_data BYTEA,
   content_type TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   resolved_at TIMESTAMPTZ

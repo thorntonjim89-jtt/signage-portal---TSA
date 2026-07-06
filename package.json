@@ -8,7 +8,6 @@
     "db:migrate": "psql \"$DATABASE_URL\" -f schema.sql"
   },
   "dependencies": {
-    "@netlify/blobs": "^10.7.9",
     "bcryptjs": "^2.4.3",
     "jsonwebtoken": "^9.0.2",
     "pg": "^8.13.1"

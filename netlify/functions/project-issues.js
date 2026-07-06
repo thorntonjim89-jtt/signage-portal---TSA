@@ -1,5 +1,3 @@
-const { getStore } = require('@netlify/blobs');
-const { randomUUID } = require('crypto');
 const { query } = require('./utils/db');
 const { getUserFromEvent, json, getIdFromPath, withErrorHandling } = require('./utils/auth');
 
@@ -30,9 +28,11 @@ async function listIssues(user, event) {
   const project = await assertChannelAccess(user, projectId, source);
   if (!project) return json(403, { error: 'Forbidden' });
 
+  // file_data excluded from the list — fetched separately per issue via
+  // project-issue-file.js so this response stays small.
   const result = await query(
     `SELECT pi.id, pi.project_id, pi.source, pi.reported_by, u.name AS reported_by_name, pi.description,
-            pi.status, pi.blob_key, pi.content_type, pi.created_at, pi.resolved_at
+            pi.status, (pi.file_data IS NOT NULL) AS has_photo, pi.created_at, pi.resolved_at
      FROM project_issues pi
      JOIN users u ON u.id = pi.reported_by
      WHERE pi.project_id = $1 AND pi.source = $2
@@ -54,7 +54,7 @@ async function createIssue(user, event) {
     return json(400, { error: 'Invalid JSON body' });
   }
 
-  const { projectId, description, filename, contentType, dataBase64 } = data;
+  const { projectId, description, contentType, dataBase64 } = data;
   if (!projectId || !description || !description.trim()) {
     return json(400, { error: 'projectId and description are required' });
   }
@@ -64,28 +64,24 @@ async function createIssue(user, event) {
   const project = await assertChannelAccess(user, projectId, source);
   if (!project) return json(403, { error: 'Forbidden' });
 
-  let blobKey = null;
+  let buffer = null;
   let storedContentType = null;
   if (dataBase64) {
-    if (!filename || !contentType) {
-      return json(400, { error: 'filename and contentType are required when attaching a photo' });
+    if (!contentType) {
+      return json(400, { error: 'contentType is required when attaching a photo' });
     }
-    const buffer = Buffer.from(dataBase64, 'base64');
+    buffer = Buffer.from(dataBase64, 'base64');
     if (buffer.length > MAX_BYTES) {
       return json(413, { error: 'Photo exceeds the 8MB upload limit' });
     }
-    const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-    blobKey = `${projectId}/${randomUUID()}-${safeName}`;
     storedContentType = contentType;
-    const store = getStore('project-issue-photos');
-    await store.set(blobKey, buffer);
   }
 
   const result = await query(
-    `INSERT INTO project_issues (project_id, source, reported_by, description, blob_key, content_type)
+    `INSERT INTO project_issues (project_id, source, reported_by, description, file_data, content_type)
      VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id, project_id, source, reported_by, description, status, blob_key, content_type, created_at, resolved_at`,
-    [projectId, source, user.id, description.trim(), blobKey, storedContentType]
+     RETURNING id, project_id, source, reported_by, description, status, (file_data IS NOT NULL) AS has_photo, created_at, resolved_at`,
+    [projectId, source, user.id, description.trim(), buffer, storedContentType]
   );
 
   return json(201, { issue: { ...result.rows[0], reported_by_name: user.name } });
@@ -112,7 +108,7 @@ async function updateIssue(user, id, event) {
     `UPDATE project_issues
      SET status = $1, resolved_at = CASE WHEN $1 = 'resolved' THEN now() ELSE NULL END
      WHERE id = $2
-     RETURNING id, project_id, source, reported_by, description, status, blob_key, content_type, created_at, resolved_at`,
+     RETURNING id, project_id, source, reported_by, description, status, (file_data IS NOT NULL) AS has_photo, created_at, resolved_at`,
     [status, id]
   );
   if (!result.rows.length) return json(404, { error: 'Issue not found' });

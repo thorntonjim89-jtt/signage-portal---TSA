@@ -14,7 +14,9 @@ private" below.
 - Static HTML/CSS/vanilla JS frontend (`public/`) — no build step.
 - Netlify Functions backend (`netlify/functions/`), Node.js.
 - Postgres via [Netlify DB](https://docs.netlify.com/database/get-started/) (Neon under the hood).
-- Photo storage via [Netlify Blobs](https://docs.netlify.com/blobs/overview/).
+- File storage (photos, quote documents, issue photos) lives directly in
+  Postgres as `BYTEA` columns rather than Netlify Blobs — see "Why files are
+  stored in Postgres" below.
 - Auth: email/password with bcrypt, JWT session cookie (httpOnly).
 
 ## Setup
@@ -85,14 +87,7 @@ proxying `/api/*` to the Netlify Functions in `netlify/functions/`.
 > that host, `netlify dev` will crash with a `Download failed with status
 > code 403` error. Everything in this app runs fine without that layer — you
 > can work around it with the CLI's internal flag:
-> `netlify dev --internal-disable-edge-functions`. On a normal network
-> connection (including Netlify's own build/deploy infrastructure) you won't
-> need this flag, and Netlify Blobs (used for photo uploads) works out of the
-> box. Under `--internal-disable-edge-functions` specifically, local Netlify
-> Blobs storage does not get wired up correctly by the CLI (a CLI-internal
-> limitation, not an issue in this app's code) — photo upload/list/download
-> is otherwise fully implemented and works normally in a standard `netlify
-> dev` session or once deployed.
+> `netlify dev --internal-disable-edge-functions`.
 
 ### 5. Deploy
 
@@ -120,6 +115,22 @@ Environment variables) before deploying.
    Shipping → Installed & Complete.
 6. Team advances stages, uploads progress photos, and both team and client
    can post to a per-project Q&A thread.
+
+## Why files are stored in Postgres
+
+Photos, quote documents, and issue photos are stored as `BYTEA` columns
+directly in Postgres (`photos.file_data`, `quote_attachments.file_data`,
+`project_issues.file_data`), not in Netlify Blobs. This wasn't the original
+design — Netlify Blobs is the more obvious fit and is what this app used
+initially — but in production `getStore()` reliably threw
+`MissingBlobsEnvironmentError` regardless of a fresh deploy or dependency
+bump, which pointed to a platform-side provisioning issue for that
+particular site rather than anything fixable in code. Since every other
+part of the app already depends on the same Postgres database working
+correctly, storing file bytes there directly removes an entire external
+dependency and its failure modes. Files are capped at 8MB and served back
+out through their own streaming endpoint (`photo-file.js`, `quote-file.js`,
+`project-issue-file.js`) rather than being embedded in list responses.
 
 ## How pricing stays private
 
@@ -150,7 +161,7 @@ netlify/functions/        Serverless API (one file per resource)
   quotes.js                 Quote CRUD, pricing, accept/decline
   supplier-requests.js       Supplier pricing requests (cost prices live here)
   projects.js                Quote→project conversion, 7-stage timeline
-  photos.js / photo-file.js  Photo upload (Netlify Blobs) and streaming
+  photos.js / photo-file.js  Photo upload (stored in Postgres) and streaming
   qna.js                      Per-project Q&A thread
 public/                    Static frontend (no build step)
   index.html                Login / register

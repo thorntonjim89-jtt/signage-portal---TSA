@@ -1,5 +1,3 @@
-const { getStore } = require('@netlify/blobs');
-const { randomUUID } = require('crypto');
 const { query } = require('./utils/db');
 const { getUserFromEvent, json, withErrorHandling } = require('./utils/auth');
 
@@ -21,8 +19,11 @@ async function listPhotos(user, event) {
   const project = await assertProjectAccess(user, projectId);
   if (!project) return json(403, { error: 'Forbidden' });
 
+  // file_data is deliberately excluded here — this is a list of metadata,
+  // not the multi-megabyte contents of every photo. Bytes are fetched one
+  // at a time via photo-file.js.
   const result = await query(
-    'SELECT id, project_id, uploaded_by, blob_key, content_type, caption, created_at FROM photos WHERE project_id = $1 ORDER BY created_at DESC',
+    'SELECT id, project_id, uploaded_by, content_type, caption, created_at FROM photos WHERE project_id = $1 ORDER BY created_at DESC',
     [projectId]
   );
   return json(200, { photos: result.rows });
@@ -36,9 +37,9 @@ async function uploadPhoto(user, event) {
     return json(400, { error: 'Invalid JSON body' });
   }
 
-  const { projectId, filename, contentType, dataBase64, caption } = data;
-  if (!projectId || !filename || !contentType || !dataBase64) {
-    return json(400, { error: 'projectId, filename, contentType and dataBase64 are required' });
+  const { projectId, contentType, dataBase64, caption } = data;
+  if (!projectId || !contentType || !dataBase64) {
+    return json(400, { error: 'projectId, contentType and dataBase64 are required' });
   }
   if (!contentType.startsWith('image/')) {
     return json(400, { error: 'Only image uploads are allowed' });
@@ -52,17 +53,11 @@ async function uploadPhoto(user, event) {
     return json(413, { error: 'Photo exceeds the 8MB upload limit' });
   }
 
-  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const blobKey = `${projectId}/${randomUUID()}-${safeName}`;
-
-  const store = getStore('project-photos');
-  await store.set(blobKey, buffer);
-
   const result = await query(
-    `INSERT INTO photos (project_id, uploaded_by, blob_key, content_type, caption)
+    `INSERT INTO photos (project_id, uploaded_by, file_data, content_type, caption)
      VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, project_id, uploaded_by, blob_key, content_type, caption, created_at`,
-    [projectId, user.id, blobKey, contentType, caption || null]
+     RETURNING id, project_id, uploaded_by, content_type, caption, created_at`,
+    [projectId, user.id, buffer, contentType, caption || null]
   );
 
   return json(201, { photo: result.rows[0] });
