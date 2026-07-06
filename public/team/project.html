@@ -116,6 +116,11 @@
     const file = form.get('photo');
     const errorEl = document.getElementById('photo-error');
     errorEl.classList.add('hidden');
+    if (fileTooLarge(file)) {
+      errorEl.textContent = `"${file.name}" is larger than 4MB — please attach a smaller photo.`;
+      errorEl.classList.remove('hidden');
+      return;
+    }
     try {
       const dataBase64 = await readFileAsBase64(file);
       await api('/photos', {
