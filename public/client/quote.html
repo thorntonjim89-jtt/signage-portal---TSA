@@ -4,6 +4,16 @@
 <main>
   <p><a href="/client/dashboard.html">&larr; Back to dashboard</a></p>
   <div class="card" id="quote-card">Loading…</div>
+
+  <div class="card">
+    <h2>Documents</h2>
+    <form id="file-form">
+      <label>Attach a file<input type="file" name="file" required></label>
+      <div class="actions"><button class="btn secondary" type="submit">Upload</button></div>
+      <div class="error hidden" id="file-error"></div>
+    </form>
+    <div id="files-list" class="muted" style="margin-top:16px;">Loading…</div>
+  </div>
 </main>
 <script src="/js/api.js"></script>
 <script>
@@ -13,6 +23,7 @@
     if (!user) return;
     renderTopbar(user, 'Signage Portal');
     await load();
+    await loadFiles();
   })();
 
   async function load() {
@@ -57,4 +68,48 @@
       errorEl.classList.remove('hidden');
     }
   }
+
+  async function loadFiles() {
+    const { files } = await api('/quote-files?quoteId=' + quoteId);
+    const el = document.getElementById('files-list');
+    el.classList.remove('muted');
+    el.innerHTML = files.length
+      ? files.map((f) => `
+        <a class="list-item" href="/api/quote-file/${f.blob_key}" target="_blank">
+          <div>
+            <div class="title">${escapeHtml(f.filename)}</div>
+            <div class="meta">Uploaded ${fmtDate(f.created_at)}</div>
+          </div>
+        </a>`).join('')
+      : '<p class="muted">No documents uploaded yet.</p>';
+  }
+
+  function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
+  document.getElementById('file-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const file = form.get('file');
+    const errorEl = document.getElementById('file-error');
+    errorEl.classList.add('hidden');
+    try {
+      const dataBase64 = await readFileAsBase64(file);
+      await api('/quote-files', {
+        method: 'POST',
+        body: { quoteId, filename: file.name, contentType: file.type || 'application/octet-stream', dataBase64 },
+      });
+      e.target.reset();
+      await loadFiles();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
 </script>

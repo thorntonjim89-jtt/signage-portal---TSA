@@ -20,8 +20,14 @@
 
 body {
   margin: 0;
-  background: var(--bg);
+  min-height: 100vh;
   color: var(--text);
+  background-color: var(--bg);
+  background-image:
+    radial-gradient(1100px 550px at 100% -8%, rgba(255, 106, 19, 0.10), transparent 60%),
+    radial-gradient(900px 500px at -8% 0%, rgba(17, 17, 20, 0.06), transparent 60%);
+  background-attachment: fixed;
+  background-repeat: no-repeat;
 }
 
 header.topbar {
@@ -221,6 +227,11 @@ table th { color: var(--muted); font-weight: 600; font-size: 12px; text-transfor
   align-items: center;
   justify-content: center;
   padding: 24px;
+  background-color: var(--ink);
+  background-image:
+    radial-gradient(1200px 640px at 50% -12%, rgba(255, 106, 19, 0.30), transparent 60%),
+    radial-gradient(900px 500px at 90% 110%, rgba(255, 106, 19, 0.12), transparent 60%);
+  background-attachment: fixed;
 }
 
 .login-card {
@@ -232,9 +243,22 @@ table th { color: var(--muted); font-weight: 600; font-size: 12px; text-transfor
   display: flex;
   justify-content: center;
   margin-bottom: 28px;
+  background: #fff;
+  border-radius: 12px;
+  padding: 20px 24px;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
 }
 
 .login-logo img {
   height: 40px;
   width: auto;
+}
+
+.login-shell .tabs button {
+  background: rgba(255, 255, 255, 0.9);
+}
+.login-shell .tabs button.active {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
 }
