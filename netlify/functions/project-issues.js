@@ -1,7 +1,11 @@
 const { query } = require('./utils/db');
 const { getUserFromEvent, json, getIdFromPath, withErrorHandling } = require('./utils/auth');
 
-const MAX_BYTES = 8 * 1024 * 1024;
+// Netlify Functions cap the incoming request body at ~6MB, and base64
+// encoding inflates a file by ~33% before it ever reaches this code. Staying
+// well under that means an oversized file gets our own clear 413 message
+// instead of an opaque platform-level failure.
+const MAX_BYTES = 4 * 1024 * 1024;
 
 // Client-reported install issues and supplier-reported manufacturing defects
 // are two deliberately siloed channels on the same project: a client never
@@ -72,7 +76,7 @@ async function createIssue(user, event) {
     }
     buffer = Buffer.from(dataBase64, 'base64');
     if (buffer.length > MAX_BYTES) {
-      return json(413, { error: 'Photo exceeds the 8MB upload limit' });
+      return json(413, { error: 'Photo exceeds the 4MB upload limit' });
     }
     storedContentType = contentType;
   }
