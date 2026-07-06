@@ -100,6 +100,11 @@
     const file = form.get('file');
     const errorEl = document.getElementById('file-error');
     errorEl.classList.add('hidden');
+    if (fileTooLarge(file)) {
+      errorEl.textContent = `"${file.name}" is larger than 4MB — please attach a smaller file.`;
+      errorEl.classList.remove('hidden');
+      return;
+    }
     try {
       const dataBase64 = await readFileAsBase64(file);
       await api('/quote-files', {

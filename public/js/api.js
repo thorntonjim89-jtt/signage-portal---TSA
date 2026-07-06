@@ -1,3 +1,14 @@
+// Matches the server-side limit in netlify/functions (photos.js, quote-files.js,
+// project-issues.js) — checked here too so an oversized file fails instantly
+// with a clear message instead of hanging on the network only to be rejected
+// server-side (or, for big enough files, silently by Netlify's platform layer
+// before our code even runs).
+const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+
+function fileTooLarge(file) {
+  return file.size > MAX_UPLOAD_BYTES;
+}
+
 async function api(path, options) {
   const opts = Object.assign({ credentials: 'include', headers: {} }, options || {});
   if (opts.body && typeof opts.body !== 'string') {

@@ -84,6 +84,13 @@
     const submitBtn = document.getElementById('quote-submit-btn');
     errorEl.classList.add('hidden');
     successEl.classList.add('hidden');
+    for (const file of files) {
+      if (fileTooLarge(file)) {
+        errorEl.textContent = `"${file.name}" is larger than 4MB — please attach a smaller file.`;
+        errorEl.classList.remove('hidden');
+        return;
+      }
+    }
     submitBtn.disabled = true;
     submitBtn.textContent = 'Submitting…';
     try {

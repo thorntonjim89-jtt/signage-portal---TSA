@@ -105,6 +105,11 @@
     const photo = form.get('photo');
     const errorEl = document.getElementById('issue-error');
     errorEl.classList.add('hidden');
+    if (photo && photo.size && fileTooLarge(photo)) {
+      errorEl.textContent = `"${photo.name}" is larger than 4MB — please attach a smaller photo.`;
+      errorEl.classList.remove('hidden');
+      return;
+    }
     try {
       const body = { projectId, description: form.get('description') };
       if (photo && photo.size) {
