@@ -1,0 +1,55 @@
+<title>Account — Signage Portal</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/css/style.css">
+<header class="topbar" id="topbar"></header>
+<main>
+  <p><a href="/" id="back-link">&larr; Back to dashboard</a></p>
+
+  <div class="card">
+    <h2>Change Password</h2>
+    <form id="password-form">
+      <label>Current password<input type="password" name="currentPassword" required></label>
+      <label>New password<input type="password" name="newPassword" minlength="8" required></label>
+      <label>Confirm new password<input type="password" name="confirmPassword" minlength="8" required></label>
+      <div class="actions"><button class="btn" type="submit">Update Password</button></div>
+      <div class="error hidden" id="password-error"></div>
+      <p class="success-text hidden" id="password-success">Password updated.</p>
+    </form>
+  </div>
+</main>
+<script src="/js/api.js"></script>
+<script>
+  (async () => {
+    const user = await requireRole(['client', 'team', 'supplier']);
+    if (!user) return;
+    renderTopbar(user, 'Signage Portal');
+    document.getElementById('back-link').href = homeFor(user.role);
+  })();
+
+  document.getElementById('password-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const errorEl = document.getElementById('password-error');
+    const successEl = document.getElementById('password-success');
+    errorEl.classList.add('hidden');
+    successEl.classList.add('hidden');
+
+    if (form.get('newPassword') !== form.get('confirmPassword')) {
+      errorEl.textContent = 'New password and confirmation do not match.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+
+    try {
+      await api('/auth-change-password', {
+        method: 'POST',
+        body: { currentPassword: form.get('currentPassword'), newPassword: form.get('newPassword') },
+      });
+      e.target.reset();
+      successEl.classList.remove('hidden');
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
+</script>
