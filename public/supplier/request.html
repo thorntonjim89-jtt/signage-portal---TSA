@@ -5,6 +5,10 @@
   <p><a href="/supplier/dashboard.html">&larr; Back to dashboard</a></p>
   <div class="card" id="request-card">Loading…</div>
   <div class="card" id="quote-card"></div>
+  <div class="card">
+    <h2>Documents</h2>
+    <div id="files-list" class="muted">Loading…</div>
+  </div>
 </main>
 <script src="/js/api.js"></script>
 <script>
@@ -74,5 +78,22 @@
         await load();
       });
     }
+
+    await loadFiles();
+  }
+
+  async function loadFiles() {
+    const { files } = await api('/quote-files?quoteId=' + quoteId);
+    const el = document.getElementById('files-list');
+    el.classList.remove('muted');
+    el.innerHTML = files.length
+      ? files.map((f) => `
+        <a class="list-item" href="/api/quote-file/${f.blob_key}" target="_blank">
+          <div>
+            <div class="title">${escapeHtml(f.filename)}</div>
+            <div class="meta">Uploaded ${fmtDate(f.created_at)}</div>
+          </div>
+        </a>`).join('')
+      : '<p class="muted">No documents uploaded yet.</p>';
   }
 </script>
