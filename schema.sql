@@ -88,11 +88,10 @@ CREATE TABLE IF NOT EXISTS qna_messages (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Seed a demo "team" account. Team/staff accounts are never created through
--- public self-registration (see auth-register.js), so at least one has to be
--- seeded here to be able to log in as team the first time.
--- Email: team@example.com   Password: TeamDemo123!
--- Change or remove this before any real deployment.
-INSERT INTO users (email, password_hash, name, role)
-VALUES ('team@example.com', '$2a$10$3W.q0zkQj3Un4TLNEerKRuz10zWLVf6Rrc599sZ2F0le84xR6sHWy', 'Demo Team Member', 'team')
-ON CONFLICT (email) DO NOTHING;
+-- Team/staff accounts are never created through public self-registration
+-- (see auth-register.js), so at least one has to be inserted manually to log
+-- in as team the first time. Run something like the following once, with a
+-- real email and a bcrypt hash of a real password (see README):
+--
+-- INSERT INTO users (email, password_hash, name, role)
+-- VALUES ('you@example.com', '<bcrypt hash>', 'Your Name', 'team');

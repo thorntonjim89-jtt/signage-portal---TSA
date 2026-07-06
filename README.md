@@ -52,14 +52,23 @@ psql "$DATABASE_URL" -f schema.sql
 ```
 
 (or `npm run db:migrate` if `DATABASE_URL` is exported in your shell). This
-creates all tables and seeds one demo **team** account, since team/staff
-accounts aren't self-registered:
+creates all tables. Team/staff accounts aren't self-registered, so you'll
+need to insert at least one manually — generate a bcrypt hash of a real
+password:
 
-- Email: `team@example.com`
-- Password: `TeamDemo123!`
+```bash
+node -e "console.log(require('bcryptjs').hashSync('your-password', 10))"
+```
 
-Change or remove that seed row before any real deployment. Client and
-supplier accounts are created via the "Create Account" tab on the login page.
+then run:
+
+```sql
+INSERT INTO users (email, password_hash, name, role)
+VALUES ('you@example.com', '<hash from above>', 'Your Name', 'team');
+```
+
+Client and supplier accounts are created via the "Create Account" tab on the
+login page.
 
 ### 4. Run it locally
 
