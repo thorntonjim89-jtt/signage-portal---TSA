@@ -79,17 +79,26 @@ exports.handler = withErrorHandling(async (event) => {
   if (error) return error;
 
   if (kind === 'photo') {
-    const { projectId, contentType, caption } = data;
+    const { projectId, contentType, caption, takenAt } = data;
     if (!projectId || !contentType) return json(400, { error: 'projectId and contentType are required' });
     if (!contentType.startsWith('image/')) return json(400, { error: 'Only image uploads are allowed' });
     const project = await assertProjectAccess(user, projectId);
     if (!project) return json(403, { error: 'Forbidden' });
 
+    // Only team can backdate a photo (e.g. bulk-importing site-visit photos
+    // after the fact) — takenAt is silently ignored for any other role.
+    let createdAt = null;
+    if (takenAt && user.role === 'team') {
+      const parsed = new Date(takenAt);
+      if (Number.isNaN(parsed.getTime())) return json(400, { error: 'takenAt must be a valid date' });
+      createdAt = parsed;
+    }
+
     const result = await query(
-      `INSERT INTO photos (project_id, uploaded_by, file_data, content_type, caption)
-       VALUES ($1, $2, $3, $4, $5)
+      `INSERT INTO photos (project_id, uploaded_by, file_data, content_type, caption, created_at)
+       VALUES ($1, $2, $3, $4, $5, COALESCE($6, now()))
        RETURNING id, project_id, uploaded_by, content_type, caption, created_at`,
-      [projectId, user.id, buffer, contentType, caption || null]
+      [projectId, user.id, buffer, contentType, caption || null, createdAt]
     );
     await cleanupChunks(uploadId);
     return json(201, { photo: result.rows[0] });
