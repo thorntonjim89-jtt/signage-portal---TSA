@@ -1,5 +1,3 @@
-const { getStore } = require('@netlify/blobs');
-const { randomUUID } = require('crypto');
 const { query } = require('./utils/db');
 const { getUserFromEvent, json, withErrorHandling } = require('./utils/auth');
 
@@ -28,7 +26,7 @@ async function listFiles(user, event) {
   if (!quote) return json(403, { error: 'Forbidden' });
 
   const result = await query(
-    'SELECT id, quote_id, uploaded_by, blob_key, filename, content_type, created_at FROM quote_attachments WHERE quote_id = $1 ORDER BY created_at DESC',
+    'SELECT id, quote_id, uploaded_by, filename, content_type, created_at FROM quote_attachments WHERE quote_id = $1 ORDER BY created_at DESC',
     [quoteId]
   );
   return json(200, { files: result.rows });
@@ -58,17 +56,11 @@ async function uploadFile(user, event) {
     return json(413, { error: 'File exceeds the 8MB upload limit' });
   }
 
-  const safeName = filename.replace(/[^a-zA-Z0-9._-]/g, '_');
-  const blobKey = `${quoteId}/${randomUUID()}-${safeName}`;
-
-  const store = getStore('quote-attachments');
-  await store.set(blobKey, buffer);
-
   const result = await query(
-    `INSERT INTO quote_attachments (quote_id, uploaded_by, blob_key, filename, content_type)
+    `INSERT INTO quote_attachments (quote_id, uploaded_by, file_data, filename, content_type)
      VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, quote_id, uploaded_by, blob_key, filename, content_type, created_at`,
-    [quoteId, user.id, blobKey, filename, contentType]
+     RETURNING id, quote_id, uploaded_by, filename, content_type, created_at`,
+    [quoteId, user.id, buffer, filename, contentType]
   );
 
   return json(201, { file: result.rows[0] });

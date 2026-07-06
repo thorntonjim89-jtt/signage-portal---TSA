@@ -1,4 +1,3 @@
-const { getStore } = require('@netlify/blobs');
 const { query } = require('./utils/db');
 const { getUserFromEvent, getIdFromPath, withErrorHandling } = require('./utils/auth');
 
@@ -6,10 +5,10 @@ exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return { statusCode: 401, body: 'Not authenticated' };
 
-  const blobKey = getIdFromPath(event, 'quote-file');
-  if (!blobKey) return { statusCode: 400, body: 'Missing file key' };
+  const id = getIdFromPath(event, 'quote-file');
+  if (!id) return { statusCode: 400, body: 'Missing file id' };
 
-  const fileResult = await query('SELECT * FROM quote_attachments WHERE blob_key = $1', [blobKey]);
+  const fileResult = await query('SELECT * FROM quote_attachments WHERE id = $1', [id]);
   const file = fileResult.rows[0];
   if (!file) return { statusCode: 404, body: 'Not found' };
 
@@ -25,10 +24,6 @@ exports.handler = withErrorHandling(async (event) => {
     if (!access.rows.length) return { statusCode: 403, body: 'Forbidden' };
   }
 
-  const store = getStore('quote-attachments');
-  const blob = await store.get(blobKey, { type: 'arrayBuffer' });
-  if (!blob) return { statusCode: 404, body: 'Not found' };
-
   return {
     statusCode: 200,
     headers: {
@@ -36,7 +31,7 @@ exports.handler = withErrorHandling(async (event) => {
       'Content-Disposition': `inline; filename="${file.filename.replace(/"/g, '')}"`,
       'Cache-Control': 'private, max-age=3600',
     },
-    body: Buffer.from(blob).toString('base64'),
+    body: Buffer.from(file.file_data).toString('base64'),
     isBase64Encoded: true,
   };
 });
