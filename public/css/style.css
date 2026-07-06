@@ -152,6 +152,8 @@ form .actions {
 .badge.accepted, .badge.submitted-cost, .badge.complete, .badge.in_progress { background: #e3f6e9; color: var(--success); }
 .badge.declined { background: #fde8e7; color: var(--danger); }
 .badge.converted { background: #e3f6e9; color: var(--success); }
+.badge.open { background: #fde8e7; color: var(--danger); }
+.badge.resolved { background: #e3f6e9; color: var(--success); }
 .badge.pending { background: #eeede9; color: var(--muted); }
 
 table { width: 100%; border-collapse: collapse; }

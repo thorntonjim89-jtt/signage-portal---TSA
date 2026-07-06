@@ -23,6 +23,16 @@
   </div>
 
   <div class="card">
+    <h2>Client-Reported Issues</h2>
+    <div id="client-issues-list" class="muted">Loading…</div>
+  </div>
+
+  <div class="card">
+    <h2>Supplier-Reported Issues</h2>
+    <div id="supplier-issues-list" class="muted">Loading…</div>
+  </div>
+
+  <div class="card">
     <h2>Questions &amp; Answers</h2>
     <div class="qna-thread" id="qna-thread"></div>
     <form id="qna-form">
@@ -43,6 +53,8 @@
     renderTopbar(currentUser, 'Signage Portal — Team');
     await loadProject();
     await loadPhotos();
+    await loadIssues('client');
+    await loadIssues('supplier');
     await loadQna();
   })();
 
@@ -117,6 +129,30 @@
       errorEl.classList.remove('hidden');
     }
   });
+
+  async function loadIssues(source) {
+    const { issues } = await api('/project-issues?projectId=' + projectId + '&source=' + source);
+    const el = document.getElementById(source + '-issues-list');
+    el.classList.remove('muted');
+    el.innerHTML = issues.length ? issues.map((i) => `
+      <div class="list-item">
+        <div>
+          <div class="title">${escapeHtml(i.description)}</div>
+          <div class="meta">${escapeHtml(i.reported_by_name)} &middot; ${fmtDate(i.created_at)}${i.blob_key ? ' &middot; <a href="/api/project-issue-file/' + i.blob_key + '" target="_blank">photo</a>' : ''}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="badge ${i.status}">${i.status}</span>
+          <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'open' ? 'resolved' : 'open'}">${i.status === 'open' ? 'Mark Resolved' : 'Reopen'}</button>
+        </div>
+      </div>`).join('') : `<p class="muted">No ${source} issues reported.</p>`;
+
+    el.querySelectorAll('button[data-status]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await api('/project-issues/' + btn.dataset.id, { method: 'PATCH', body: { status: btn.dataset.status } });
+        await loadIssues(source);
+      });
+    });
+  }
 
   async function loadQna() {
     const { messages } = await api('/qna?projectId=' + projectId);

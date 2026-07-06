@@ -1,9 +1,9 @@
-<title>Project Detail</title>
+<title>Project Detail — Supplier</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/css/style.css">
 <header class="topbar" id="topbar"></header>
 <main>
-  <p><a href="/client/dashboard.html">&larr; Back to dashboard</a></p>
+  <p><a href="/supplier/dashboard.html">&larr; Back to dashboard</a></p>
   <div class="card" id="project-header">Loading…</div>
 
   <div class="card">
@@ -12,13 +12,8 @@
   </div>
 
   <div class="card">
-    <h2>Photos</h2>
-    <div class="photo-grid" id="photo-grid"></div>
-  </div>
-
-  <div class="card">
-    <h2>Report an Issue</h2>
-    <p class="muted">Noticed a problem with the install or the sign itself? Let us know.</p>
+    <h2>Report a Defect</h2>
+    <p class="muted">Found a manufacturing issue with this job? Let the team know.</p>
     <form id="issue-form">
       <label>Description<textarea name="description" rows="2" required placeholder="What's wrong?"></textarea></label>
       <label>Photo (optional)<input type="file" name="photo" accept="image/*"></label>
@@ -27,37 +22,22 @@
     </form>
     <div id="issues-list" class="muted" style="margin-top:16px;">Loading…</div>
   </div>
-
-  <div class="card">
-    <h2>Questions &amp; Answers</h2>
-    <div class="qna-thread" id="qna-thread"></div>
-    <form id="qna-form">
-      <textarea name="message" rows="2" placeholder="Ask a question about your project..." required></textarea>
-      <div class="actions"><button class="btn" type="submit">Send</button></div>
-    </form>
-  </div>
 </main>
 <script src="/js/api.js"></script>
 <script>
   const projectId = qs('id');
-  let currentUser;
 
   (async () => {
-    currentUser = await requireRole(['client']);
-    if (!currentUser) return;
-    renderTopbar(currentUser, 'Signage Portal');
+    const user = await requireRole(['supplier']);
+    if (!user) return;
+    renderTopbar(user, 'Signage Portal — Supplier');
     await loadProject();
-    await loadPhotos();
     await loadIssues();
-    await loadQna();
   })();
 
   async function loadProject() {
     const { project } = await api('/projects/' + projectId);
-    document.getElementById('project-header').innerHTML = `
-      <h2>${escapeHtml(project.title)}</h2>
-      <p><strong>Price:</strong> ${fmtMoney(project.client_price)}</p>
-    `;
+    document.getElementById('project-header').innerHTML = `<h2>${escapeHtml(project.title)}</h2>`;
     document.getElementById('timeline').innerHTML = project.stages.map((s) => `
       <li class="${s.status}">
         <span class="dot">${s.status === 'complete' ? '✓' : s.stage_number}</span>
@@ -66,14 +46,6 @@
           <div class="meta muted">${s.completed_at ? 'Completed ' + fmtDate(s.completed_at) : s.started_at ? 'Started ' + fmtDate(s.started_at) : ''}</div>
         </div>
       </li>`).join('');
-  }
-
-  async function loadPhotos() {
-    const { photos } = await api('/photos?projectId=' + projectId);
-    const el = document.getElementById('photo-grid');
-    el.innerHTML = photos.length
-      ? photos.map((p) => `<img src="/api/photo-file/${p.blob_key}" alt="${escapeHtml(p.caption || '')}" title="${escapeHtml(p.caption || '')}">`).join('')
-      : '<p class="muted">No photos uploaded yet.</p>';
   }
 
   function readFileAsBase64(file) {
@@ -86,7 +58,7 @@
   }
 
   async function loadIssues() {
-    const { issues } = await api('/project-issues?projectId=' + projectId + '&source=client');
+    const { issues } = await api('/project-issues?projectId=' + projectId + '&source=supplier');
     const el = document.getElementById('issues-list');
     el.classList.remove('muted');
     el.innerHTML = issues.length ? issues.map((i) => `
@@ -119,24 +91,5 @@
       errorEl.textContent = err.message;
       errorEl.classList.remove('hidden');
     }
-  });
-
-  async function loadQna() {
-    const { messages } = await api('/qna?projectId=' + projectId);
-    const el = document.getElementById('qna-thread');
-    el.innerHTML = messages.map((m) => `
-      <div class="qna-msg ${m.sender_id === currentUser.id ? 'mine' : ''}">
-        <div class="meta">${escapeHtml(m.sender_name)} (${m.sender_role}) &middot; ${fmtDate(m.created_at)}</div>
-        <div>${escapeHtml(m.message)}</div>
-      </div>`).join('') || '<p class="muted">No messages yet.</p>';
-    el.scrollTop = el.scrollHeight;
-  }
-
-  document.getElementById('qna-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = new FormData(e.target);
-    await api('/qna', { method: 'POST', body: { projectId, message: form.get('message') } });
-    e.target.reset();
-    await loadQna();
   });
 </script>

@@ -40,7 +40,12 @@
   <div class="card hidden" id="convert-card">
     <h2>Convert to Project</h2>
     <p class="muted">The client has accepted this quote. Convert it into a 7-stage project.</p>
-    <button class="btn" id="convert-btn">Convert to Project</button>
+    <label>Fabricating supplier (optional)
+      <select id="convert-supplier">
+        <option value="">In-house / none</option>
+      </select>
+    </label>
+    <div class="actions"><button class="btn" id="convert-btn">Convert to Project</button></div>
   </div>
 </main>
 <script src="/js/api.js"></script>
@@ -116,14 +121,19 @@
     const el = document.getElementById('supplier-requests');
     el.classList.remove('muted');
     el.innerHTML = requests.length ? `<table>
-      <thead><tr><th>Status</th><th>Cost Price</th><th>Notes</th><th>Requested</th></tr></thead>
+      <thead><tr><th>Supplier</th><th>Status</th><th>Cost Price</th><th>Notes</th><th>Requested</th></tr></thead>
       <tbody>${requests.map((r) => `<tr>
+        <td>${escapeHtml(r.supplier_name)}<br><span class="muted">${escapeHtml(r.supplier_email)}</span></td>
         <td><span class="badge ${r.status}">${r.status}</span></td>
         <td>${fmtMoney(r.cost_price)}</td>
         <td>${escapeHtml(r.notes || '')}</td>
         <td>${fmtDate(r.requested_at)}</td>
       </tr>`).join('')}</tbody>
     </table>` : '<p class="muted">No supplier requests yet.</p>';
+
+    const select = document.getElementById('convert-supplier');
+    select.innerHTML = '<option value="">In-house / none</option>' +
+      requests.map((r) => `<option value="${r.supplier_id}">${escapeHtml(r.supplier_name)} (${escapeHtml(r.supplier_email)})</option>`).join('');
   }
 
   document.getElementById('supplier-form').addEventListener('submit', async (e) => {
@@ -162,7 +172,11 @@
   });
 
   document.getElementById('convert-btn').addEventListener('click', async () => {
-    const { project } = await api('/projects', { method: 'POST', body: { quoteId } });
+    const supplierId = document.getElementById('convert-supplier').value;
+    const { project } = await api('/projects', {
+      method: 'POST',
+      body: { quoteId, supplierId: supplierId ? Number(supplierId) : undefined },
+    });
     window.location.href = '/team/project.html?id=' + project.id;
   });
 </script>
