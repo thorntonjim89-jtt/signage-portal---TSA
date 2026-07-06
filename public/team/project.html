@@ -14,10 +14,12 @@
   <div class="card">
     <h2>Photos</h2>
     <form id="photo-form">
-      <label>Photo<input type="file" name="photo" accept="image/*" required></label>
-      <label>Caption<input type="text" name="caption" placeholder="Optional caption"></label>
-      <div class="actions"><button class="btn secondary" type="submit">Upload Photo</button></div>
+      <label>Photo(s)<input type="file" name="photo" accept="image/*" multiple required></label>
+      <label>Caption<input type="text" name="caption" placeholder="Optional caption, applied to all selected photos"></label>
+      <label>Date taken (optional)<input type="date" name="takenAt"></label>
+      <div class="actions"><button class="btn secondary" type="submit">Upload Photo(s)</button></div>
       <div class="error hidden" id="photo-error"></div>
+      <p class="muted hidden" id="photo-progress"></p>
     </form>
     <div class="photo-grid" id="photo-grid" style="margin-top:16px;"></div>
   </div>
@@ -104,27 +106,47 @@
   document.getElementById('photo-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
-    const file = form.get('photo');
+    const files = document.querySelector('#photo-form input[name=photo]').files;
     const errorEl = document.getElementById('photo-error');
+    const progressEl = document.getElementById('photo-progress');
     errorEl.classList.add('hidden');
-    if (fileTooLarge(file)) {
-      errorEl.textContent = `"${file.name}" is larger than 50MB — please attach a smaller photo.`;
+    progressEl.classList.add('hidden');
+
+    const tooLarge = Array.from(files).find(fileTooLarge);
+    if (tooLarge) {
+      errorEl.textContent = `"${tooLarge.name}" is larger than 50MB — please attach a smaller photo.`;
       errorEl.classList.remove('hidden');
       return;
     }
-    try {
-      await uploadFileInChunks(file, {
-        kind: 'photo',
-        projectId,
-        contentType: file.type,
-        caption: form.get('caption'),
-      });
-      e.target.reset();
-      await loadPhotos();
-    } catch (err) {
-      errorEl.textContent = err.message;
-      errorEl.classList.remove('hidden');
+
+    const caption = form.get('caption');
+    const takenAt = form.get('takenAt');
+    const failed = [];
+    progressEl.classList.remove('hidden');
+    for (let i = 0; i < files.length; i += 1) {
+      const file = files[i];
+      progressEl.textContent = `Uploading ${i + 1} of ${files.length} (${file.name})…`;
+      try {
+        await uploadFileInChunks(file, {
+          kind: 'photo',
+          projectId,
+          contentType: file.type,
+          caption: caption || undefined,
+          takenAt: takenAt || undefined,
+        });
+      } catch (err) {
+        failed.push(`${file.name}: ${err.message}`);
+      }
     }
+
+    progressEl.classList.add('hidden');
+    if (failed.length) {
+      errorEl.textContent = `${files.length - failed.length} of ${files.length} uploaded. Failed: ${failed.join('; ')}`;
+      errorEl.classList.remove('hidden');
+    } else {
+      e.target.reset();
+    }
+    await loadPhotos();
   });
 
   async function loadIssues(source) {
