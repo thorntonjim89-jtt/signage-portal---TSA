@@ -1,11 +1,10 @@
 const { query } = require('./utils/db');
 const { getUserFromEvent, json, getIdFromPath, withErrorHandling } = require('./utils/auth');
 
-// Netlify Functions cap the incoming request body at ~6MB, and base64
-// encoding inflates a file by ~33% before it ever reaches this code. Staying
-// well under that means an oversized file gets our own clear 413 message
-// instead of an opaque platform-level failure.
-const MAX_BYTES = 4 * 1024 * 1024;
+// An issue reported with a photo goes through upload-chunk.js +
+// upload-finalize.js (kind: 'issue-photo') instead of this endpoint, so a
+// large photo doesn't have to fit in a single function request. createIssue
+// here only ever handles the text-only case.
 
 // Client-reported install issues and supplier-reported manufacturing defects
 // are two deliberately siloed channels on the same project: a client never
@@ -58,7 +57,7 @@ async function createIssue(user, event) {
     return json(400, { error: 'Invalid JSON body' });
   }
 
-  const { projectId, description, contentType, dataBase64 } = data;
+  const { projectId, description } = data;
   if (!projectId || !description || !description.trim()) {
     return json(400, { error: 'projectId and description are required' });
   }
@@ -68,24 +67,11 @@ async function createIssue(user, event) {
   const project = await assertChannelAccess(user, projectId, source);
   if (!project) return json(403, { error: 'Forbidden' });
 
-  let buffer = null;
-  let storedContentType = null;
-  if (dataBase64) {
-    if (!contentType) {
-      return json(400, { error: 'contentType is required when attaching a photo' });
-    }
-    buffer = Buffer.from(dataBase64, 'base64');
-    if (buffer.length > MAX_BYTES) {
-      return json(413, { error: 'Photo exceeds the 4MB upload limit' });
-    }
-    storedContentType = contentType;
-  }
-
   const result = await query(
-    `INSERT INTO project_issues (project_id, source, reported_by, description, file_data, content_type)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO project_issues (project_id, source, reported_by, description)
+     VALUES ($1, $2, $3, $4)
      RETURNING id, project_id, source, reported_by, description, status, (file_data IS NOT NULL) AS has_photo, created_at, resolved_at`,
-    [projectId, source, user.id, description.trim(), buffer, storedContentType]
+    [projectId, source, user.id, description.trim()]
   );
 
   return json(201, { issue: { ...result.rows[0], reported_by_name: user.name } });

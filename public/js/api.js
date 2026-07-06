@@ -1,12 +1,40 @@
-// Matches the server-side limit in netlify/functions (photos.js, quote-files.js,
-// project-issues.js) — checked here too so an oversized file fails instantly
-// with a clear message instead of hanging on the network only to be rejected
-// server-side (or, for big enough files, silently by Netlify's platform layer
-// before our code even runs).
-const MAX_UPLOAD_BYTES = 4 * 1024 * 1024;
+// Matches the overall cap enforced server-side in upload-chunk.js — checked
+// here too so a wildly oversized file fails instantly with a clear message
+// instead of grinding through however many chunks before being rejected.
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+// Per-chunk size: comfortably under Netlify's ~6MB per-request ceiling even
+// after base64 inflation (~33%) and JSON overhead.
+const UPLOAD_CHUNK_BYTES = 2 * 1024 * 1024;
 
 function fileTooLarge(file) {
   return file.size > MAX_UPLOAD_BYTES;
+}
+
+function readBlobAsBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+// Splits a file into chunks small enough to fit in one function request,
+// uploads them one at a time, then asks the server to assemble them into the
+// real record (a photo, a quote document, or an issue photo — see `kind` in
+// upload-finalize.js). This is how every file upload in the app works, no
+// matter how small the file — one consistent path instead of a separate
+// "small file" and "large file" mechanism.
+async function uploadFileInChunks(file, finalizeBody) {
+  const uploadId = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const totalChunks = Math.max(1, Math.ceil(file.size / UPLOAD_CHUNK_BYTES));
+  for (let i = 0; i < totalChunks; i += 1) {
+    const start = i * UPLOAD_CHUNK_BYTES;
+    const chunk = file.slice(start, start + UPLOAD_CHUNK_BYTES);
+    const dataBase64 = await readBlobAsBase64(chunk);
+    await api('/upload-chunk', { method: 'POST', body: { uploadId, chunkIndex: i, dataBase64 } });
+  }
+  return api('/upload-finalize', { method: 'POST', body: { uploadId, ...finalizeBody } });
 }
 
 async function api(path, options) {

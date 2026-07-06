@@ -116,6 +116,22 @@ CREATE TABLE IF NOT EXISTS project_issues (
   resolved_at TIMESTAMPTZ
 );
 
+-- Temporary holding area for large-file uploads. The browser splits a big
+-- file into pieces small enough to fit in a single Netlify Function request
+-- and uploads them here one at a time (upload-chunk.js); once they're all in,
+-- upload-finalize.js assembles them into the real photos/quote_attachments/
+-- project_issues row and deletes the chunk rows. Nothing here is meant to
+-- persist beyond that assembly step.
+CREATE TABLE IF NOT EXISTS upload_chunks (
+  id SERIAL PRIMARY KEY,
+  upload_id TEXT NOT NULL,
+  uploaded_by INTEGER NOT NULL REFERENCES users(id),
+  chunk_index INTEGER NOT NULL,
+  chunk_data BYTEA NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (upload_id, chunk_index)
+);
+
 -- Team/staff accounts are never created through public self-registration
 -- (see auth-register.js), so at least one has to be inserted manually to log
 -- in as team the first time. Run something like the following once, with a

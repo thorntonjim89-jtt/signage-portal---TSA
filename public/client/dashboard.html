@@ -66,15 +66,6 @@
       </a>`).join('');
   }
 
-  function readFileAsBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
   document.getElementById('quote-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
@@ -86,7 +77,7 @@
     successEl.classList.add('hidden');
     for (const file of files) {
       if (fileTooLarge(file)) {
-        errorEl.textContent = `"${file.name}" is larger than 4MB — please attach a smaller file.`;
+        errorEl.textContent = `"${file.name}" is larger than 50MB — please attach a smaller file.`;
         errorEl.classList.remove('hidden');
         return;
       }
@@ -99,10 +90,11 @@
         body: { title: form.get('title'), description: form.get('description'), quantity: Number(form.get('quantity')) || 1 },
       });
       for (const file of files) {
-        const dataBase64 = await readFileAsBase64(file);
-        await api('/quote-files', {
-          method: 'POST',
-          body: { quoteId: quote.id, filename: file.name, contentType: file.type || 'application/octet-stream', dataBase64 },
+        await uploadFileInChunks(file, {
+          kind: 'quote-file',
+          quoteId: quote.id,
+          filename: file.name,
+          contentType: file.type || 'application/octet-stream',
         });
       }
       e.target.reset();
