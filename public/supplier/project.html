@@ -48,15 +48,6 @@
       </li>`).join('');
   }
 
-  function readFileAsBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
   async function loadIssues() {
     const { issues } = await api('/project-issues?projectId=' + projectId + '&source=supplier');
     const el = document.getElementById('issues-list');
@@ -78,18 +69,21 @@
     const errorEl = document.getElementById('issue-error');
     errorEl.classList.add('hidden');
     if (photo && photo.size && fileTooLarge(photo)) {
-      errorEl.textContent = `"${photo.name}" is larger than 4MB — please attach a smaller photo.`;
+      errorEl.textContent = `"${photo.name}" is larger than 50MB — please attach a smaller photo.`;
       errorEl.classList.remove('hidden');
       return;
     }
     try {
-      const body = { projectId, description: form.get('description') };
       if (photo && photo.size) {
-        body.dataBase64 = await readFileAsBase64(photo);
-        body.filename = photo.name;
-        body.contentType = photo.type || 'application/octet-stream';
+        await uploadFileInChunks(photo, {
+          kind: 'issue-photo',
+          projectId,
+          description: form.get('description'),
+          contentType: photo.type || 'application/octet-stream',
+        });
+      } else {
+        await api('/project-issues', { method: 'POST', body: { projectId, description: form.get('description') } });
       }
-      await api('/project-issues', { method: 'POST', body });
       e.target.reset();
       await loadIssues();
     } catch (err) {

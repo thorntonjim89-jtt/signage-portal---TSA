@@ -85,15 +85,6 @@
       : '<p class="muted">No documents uploaded yet.</p>';
   }
 
-  function readFileAsBase64(file) {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result.split(',')[1]);
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  }
-
   document.getElementById('file-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
@@ -101,15 +92,16 @@
     const errorEl = document.getElementById('file-error');
     errorEl.classList.add('hidden');
     if (fileTooLarge(file)) {
-      errorEl.textContent = `"${file.name}" is larger than 4MB — please attach a smaller file.`;
+      errorEl.textContent = `"${file.name}" is larger than 50MB — please attach a smaller file.`;
       errorEl.classList.remove('hidden');
       return;
     }
     try {
-      const dataBase64 = await readFileAsBase64(file);
-      await api('/quote-files', {
-        method: 'POST',
-        body: { quoteId, filename: file.name, contentType: file.type || 'application/octet-stream', dataBase64 },
+      await uploadFileInChunks(file, {
+        kind: 'quote-file',
+        quoteId,
+        filename: file.name,
+        contentType: file.type || 'application/octet-stream',
       });
       e.target.reset();
       await loadFiles();
