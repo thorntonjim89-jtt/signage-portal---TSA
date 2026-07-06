@@ -40,9 +40,9 @@ exports.handler = withErrorHandling(async (event) => {
   const passwordHash = await bcrypt.hash(password, 10);
 
   const result = await query(
-    `INSERT INTO users (email, password_hash, name, role, company_name)
-     VALUES ($1, $2, $3, $4, $5)
-     RETURNING id, email, name, role, company_name, created_at`,
+    `INSERT INTO users (email, password_hash, name, role, company_name, status)
+     VALUES ($1, $2, $3, $4, $5, 'pending')
+     RETURNING id, email, name, role, company_name, status, created_at`,
     [normalizedEmail, passwordHash, name, role, companyName || null]
   );
 

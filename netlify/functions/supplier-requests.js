@@ -62,10 +62,13 @@ async function createRequest(user, event) {
   if (!quoteResult.rows.length) return json(404, { error: 'Quote not found' });
 
   const supplierResult = supplierId
-    ? await query("SELECT id FROM users WHERE id = $1 AND role = 'supplier'", [supplierId])
-    : await query("SELECT id FROM users WHERE email = $1 AND role = 'supplier'", [supplierEmail.toLowerCase().trim()]);
+    ? await query("SELECT id FROM users WHERE id = $1 AND role = 'supplier' AND status = 'approved'", [supplierId])
+    : await query(
+        "SELECT id FROM users WHERE email = $1 AND role = 'supplier' AND status = 'approved'",
+        [supplierEmail.toLowerCase().trim()]
+      );
   if (!supplierResult.rows.length) {
-    return json(400, { error: 'No supplier account found for that email' });
+    return json(400, { error: 'No approved supplier account found for that email' });
   }
   const resolvedSupplierId = supplierResult.rows[0].id;
 

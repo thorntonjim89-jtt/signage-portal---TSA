@@ -30,6 +30,13 @@ exports.handler = withErrorHandling(async (event) => {
     return json(401, { error: 'Invalid email or password' });
   }
 
+  if (user.status === 'pending') {
+    return json(403, { error: 'Your account is awaiting approval. We\'ll let you know once it\'s approved.' });
+  }
+  if (user.status === 'rejected') {
+    return json(403, { error: 'This account request was declined. Contact us for more information.' });
+  }
+
   const token = signToken(user);
 
   return {
