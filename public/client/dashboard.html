@@ -36,6 +36,7 @@
   async function loadQuotes() {
     const { quotes } = await api('/quotes');
     const el = document.getElementById('quotes-list');
+    el.classList.remove('muted');
     if (!quotes.length) { el.innerHTML = '<p class="muted">No quote requests yet.</p>'; return; }
     el.innerHTML = quotes.map((q) => `
       <a class="list-item" href="/client/quote.html?id=${q.id}">
@@ -50,6 +51,7 @@
   async function loadProjects() {
     const { projects } = await api('/projects');
     const el = document.getElementById('projects-list');
+    el.classList.remove('muted');
     if (!projects.length) { el.innerHTML = '<p class="muted">No active projects yet.</p>'; return; }
     el.innerHTML = projects.map((p) => `
       <a class="list-item" href="/client/project.html?id=${p.id}">

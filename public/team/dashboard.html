@@ -25,6 +25,7 @@
   async function loadQuotes() {
     const { quotes } = await api('/quotes');
     const el = document.getElementById('quotes-list');
+    el.classList.remove('muted');
     el.innerHTML = quotes.length ? quotes.map((q) => `
       <a class="list-item" href="/team/quote.html?id=${q.id}">
         <div>
@@ -38,6 +39,7 @@
   async function loadProjects() {
     const { projects } = await api('/projects');
     const el = document.getElementById('projects-list');
+    el.classList.remove('muted');
     el.innerHTML = projects.length ? projects.map((p) => `
       <a class="list-item" href="/team/project.html?id=${p.id}">
         <div>

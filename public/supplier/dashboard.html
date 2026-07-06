@@ -19,6 +19,7 @@
   async function load() {
     const { requests } = await api('/supplier-requests');
     const el = document.getElementById('requests-list');
+    el.classList.remove('muted');
     el.innerHTML = requests.length ? requests.map((r) => `
       <a class="list-item" href="/supplier/request.html?id=${r.id}">
         <div>

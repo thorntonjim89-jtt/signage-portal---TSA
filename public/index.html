@@ -1,7 +1,8 @@
-<title>Signage Portal — Sign In</title>
+<title>The Signage Agency — Client Portal</title>
 <link rel="stylesheet" href="/css/style.css">
-<main style="max-width:420px;">
-  <h1>Signage Portal</h1>
+<div class="login-shell">
+<main class="login-card">
+  <div class="login-logo"><img src="/images/logo.png" alt="The Signage Agency"></div>
 
   <div class="tabs">
     <button id="tab-login" class="active">Log In</button>
@@ -37,6 +38,7 @@
     </form>
   </div>
 </main>
+</div>
 <script src="/js/api.js"></script>
 <script>
   document.getElementById('tab-login').addEventListener('click', () => switchTab('login'));
