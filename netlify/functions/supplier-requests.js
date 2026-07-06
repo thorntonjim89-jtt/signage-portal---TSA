@@ -15,7 +15,17 @@ function sanitizeRequest(row, user) {
     requested_at: row.requested_at,
     responded_at: row.responded_at,
   };
-  if (user.role === 'team' || (user.role === 'supplier' && row.supplier_id === user.id)) {
+  if (user.role === 'team') {
+    return {
+      ...base,
+      supplier_id: row.supplier_id,
+      supplier_name: row.supplier_name,
+      supplier_email: row.supplier_email,
+      cost_price: row.cost_price,
+      notes: row.notes,
+    };
+  }
+  if (user.role === 'supplier' && row.supplier_id === user.id) {
     return { ...base, supplier_id: row.supplier_id, cost_price: row.cost_price, notes: row.notes };
   }
   return base;
@@ -26,8 +36,17 @@ async function listRequests(user, event) {
 
   if (user.role === 'team') {
     const result = quoteId
-      ? await query('SELECT * FROM supplier_requests WHERE quote_id = $1 ORDER BY requested_at DESC', [quoteId])
-      : await query('SELECT * FROM supplier_requests ORDER BY requested_at DESC');
+      ? await query(
+          `SELECT sr.*, u.name AS supplier_name, u.email AS supplier_email
+           FROM supplier_requests sr JOIN users u ON u.id = sr.supplier_id
+           WHERE sr.quote_id = $1 ORDER BY sr.requested_at DESC`,
+          [quoteId]
+        )
+      : await query(
+          `SELECT sr.*, u.name AS supplier_name, u.email AS supplier_email
+           FROM supplier_requests sr JOIN users u ON u.id = sr.supplier_id
+           ORDER BY sr.requested_at DESC`
+        );
     return json(200, { requests: result.rows.map((row) => sanitizeRequest(row, user)) });
   }
 

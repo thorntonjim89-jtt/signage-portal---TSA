@@ -48,6 +48,11 @@ CREATE TABLE IF NOT EXISTS projects (
   id SERIAL PRIMARY KEY,
   quote_id INTEGER NOT NULL UNIQUE REFERENCES quotes(id) ON DELETE CASCADE,
   client_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  -- The supplier who actually fabricated this job, if any (picked by team at
+  -- conversion time from whoever priced the originating quote). Null means
+  -- it was produced in-house. This is what gives a supplier ongoing access
+  -- to a project after the quoting phase, e.g. to report a defect.
+  supplier_id INTEGER REFERENCES users(id),
   title TEXT NOT NULL,
   current_stage INTEGER NOT NULL DEFAULT 1,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
@@ -90,6 +95,23 @@ CREATE TABLE IF NOT EXISTS qna_messages (
   sender_id INTEGER NOT NULL REFERENCES users(id),
   message TEXT NOT NULL,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Two separate, siloed channels for reporting problems on a project: a
+-- client might report an install issue, a supplier might report a
+-- manufacturing defect. Neither can see the other's reports; team sees both
+-- (see project-issues.js).
+CREATE TABLE IF NOT EXISTS project_issues (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  source TEXT NOT NULL CHECK (source IN ('client', 'supplier')),
+  reported_by INTEGER NOT NULL REFERENCES users(id),
+  description TEXT NOT NULL,
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')),
+  blob_key TEXT UNIQUE,
+  content_type TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolved_at TIMESTAMPTZ
 );
 
 -- Team/staff accounts are never created through public self-registration

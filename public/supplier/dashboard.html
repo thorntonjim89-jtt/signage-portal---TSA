@@ -4,6 +4,11 @@
 <header class="topbar" id="topbar"></header>
 <main>
   <div class="card">
+    <h2>My Projects</h2>
+    <div id="projects-list" class="muted">Loading…</div>
+  </div>
+
+  <div class="card">
     <h2>Pricing Requests</h2>
     <div id="requests-list" class="muted">Loading…</div>
   </div>
@@ -14,10 +19,25 @@
     const user = await requireRole(['supplier']);
     if (!user) return;
     renderTopbar(user, 'Signage Portal — Supplier');
-    await load();
+    await loadProjects();
+    await loadRequests();
   })();
 
-  async function load() {
+  async function loadProjects() {
+    const { projects } = await api('/projects');
+    const el = document.getElementById('projects-list');
+    el.classList.remove('muted');
+    el.innerHTML = projects.length ? projects.map((p) => `
+      <a class="list-item" href="/supplier/project.html?id=${p.id}">
+        <div>
+          <div class="title">${escapeHtml(p.title)}</div>
+          <div class="meta">Stage ${p.current_stage} of 7</div>
+        </div>
+        <span class="badge in_progress">In progress</span>
+      </a>`).join('') : '<p class="muted">No projects assigned yet.</p>';
+  }
+
+  async function loadRequests() {
     const { requests } = await api('/supplier-requests');
     const el = document.getElementById('requests-list');
     el.classList.remove('muted');

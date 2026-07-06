@@ -16,19 +16,37 @@ async function assertProjectAccess(user, projectId) {
   const project = result.rows[0];
   if (!project) return null;
   if (user.role === 'client' && project.client_id !== user.id) return null;
-  if (user.role === 'supplier') return null;
+  if (user.role === 'supplier' && project.supplier_id !== user.id) return null;
   return project;
 }
 
 async function listProjects(user) {
-  if (user.role === 'supplier') {
-    return json(200, { projects: [] });
+  let result;
+  if (user.role === 'client') {
+    result = await query('SELECT * FROM projects WHERE client_id = $1 ORDER BY created_at DESC', [user.id]);
+  } else if (user.role === 'supplier') {
+    result = await query('SELECT * FROM projects WHERE supplier_id = $1 ORDER BY created_at DESC', [user.id]);
+  } else {
+    result = await query('SELECT * FROM projects ORDER BY created_at DESC');
   }
-  const result =
-    user.role === 'client'
-      ? await query('SELECT * FROM projects WHERE client_id = $1 ORDER BY created_at DESC', [user.id])
-      : await query('SELECT * FROM projects ORDER BY created_at DESC');
-  return json(200, { projects: result.rows });
+  return json(200, { projects: result.rows.map((row) => sanitizeProject(row, user.role)) });
+}
+
+function sanitizeProject(project, role) {
+  const base = {
+    id: project.id,
+    quote_id: project.quote_id,
+    title: project.title,
+    current_stage: project.current_stage,
+    created_at: project.created_at,
+  };
+  // Suppliers must never see the client's price (same rule as quotes.js), and
+  // neither the client nor the supplier need to see the other party's
+  // identity — the agency's supply chain isn't the client's business, and a
+  // supplier doesn't need the client's account id.
+  if (role === 'team') return { ...base, client_id: project.client_id, supplier_id: project.supplier_id };
+  if (role === 'client') return { ...base, client_price: project.client_price };
+  return base;
 }
 
 async function getProject(user, id) {
@@ -40,11 +58,11 @@ async function getProject(user, id) {
     [id]
   );
   const quoteResult = await query('SELECT client_price FROM quotes WHERE id = $1', [project.quote_id]);
+  project.client_price = quoteResult.rows[0] ? quoteResult.rows[0].client_price : null;
 
   return json(200, {
     project: {
-      ...project,
-      client_price: quoteResult.rows[0] ? quoteResult.rows[0].client_price : null,
+      ...sanitizeProject(project, user.role),
       stages: stagesResult.rows,
     },
   });
@@ -62,7 +80,7 @@ async function convertQuoteToProject(user, event) {
     return json(400, { error: 'Invalid JSON body' });
   }
 
-  const { quoteId } = data;
+  const { quoteId, supplierId } = data;
   if (!quoteId) return json(400, { error: 'quoteId is required' });
 
   const quoteResult = await query('SELECT * FROM quotes WHERE id = $1', [quoteId]);
@@ -77,9 +95,21 @@ async function convertQuoteToProject(user, event) {
     return json(409, { error: 'This quote has already been converted into a project' });
   }
 
+  let resolvedSupplierId = null;
+  if (supplierId) {
+    const supplierCheck = await query(
+      'SELECT 1 FROM supplier_requests WHERE quote_id = $1 AND supplier_id = $2',
+      [quoteId, supplierId]
+    );
+    if (!supplierCheck.rows.length) {
+      return json(400, { error: 'supplierId must be a supplier who was asked to price this quote' });
+    }
+    resolvedSupplierId = supplierId;
+  }
+
   const projectResult = await query(
-    `INSERT INTO projects (quote_id, client_id, title) VALUES ($1, $2, $3) RETURNING *`,
-    [quoteId, quote.client_id, quote.title]
+    `INSERT INTO projects (quote_id, client_id, supplier_id, title) VALUES ($1, $2, $3, $4) RETURNING *`,
+    [quoteId, quote.client_id, resolvedSupplierId, quote.title]
   );
   const project = projectResult.rows[0];
 
