@@ -58,6 +58,7 @@
   async function loadSupplierRequests() {
     const { requests } = await api('/supplier-requests?quoteId=' + quoteId);
     const el = document.getElementById('supplier-requests');
+    el.classList.remove('muted');
     el.innerHTML = requests.length ? `<table>
       <thead><tr><th>Status</th><th>Cost Price</th><th>Notes</th><th>Requested</th></tr></thead>
       <tbody>${requests.map((r) => `<tr>
