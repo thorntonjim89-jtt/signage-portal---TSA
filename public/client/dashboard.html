@@ -8,6 +8,7 @@
       <label>Title<input type="text" name="title" required placeholder="e.g. Storefront illuminated sign"></label>
       <label>Description<textarea name="description" rows="3" placeholder="Size, material, mounting, deadline..."></textarea></label>
       <label>Quantity<input type="number" name="quantity" value="1" min="1"></label>
+      <label>Attach files (optional)<input type="file" name="files" multiple></label>
       <div class="actions"><button class="btn" type="submit">Submit Request</button></div>
       <div class="error hidden" id="quote-error"></div>
     </form>
@@ -63,16 +64,33 @@
       </a>`).join('');
   }
 
+  function readFileAsBase64(file) {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result.split(',')[1]);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  }
+
   document.getElementById('quote-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const form = new FormData(e.target);
+    const files = document.querySelector('input[name=files]').files;
     const errorEl = document.getElementById('quote-error');
     errorEl.classList.add('hidden');
     try {
-      await api('/quotes', {
+      const { quote } = await api('/quotes', {
         method: 'POST',
         body: { title: form.get('title'), description: form.get('description'), quantity: Number(form.get('quantity')) || 1 },
       });
+      for (const file of files) {
+        const dataBase64 = await readFileAsBase64(file);
+        await api('/quote-files', {
+          method: 'POST',
+          body: { quoteId: quote.id, filename: file.name, contentType: file.type || 'application/octet-stream', dataBase64 },
+        });
+      }
       e.target.reset();
       await loadQuotes();
     } catch (err) {
