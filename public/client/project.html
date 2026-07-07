@@ -51,15 +51,16 @@
 <script>
   const projectId = qs('id');
   let currentUser;
+  let scheduledWorkItems = [];
 
   (async () => {
     currentUser = await requireRole(['client']);
     if (!currentUser) return;
     renderTopbar(currentUser, 'Signage Portal');
     initTabs();
+    await loadScheduledWork();
     await loadProject();
     await loadPhotos();
-    await loadScheduledWork();
     await loadIssues();
     await loadQna();
   })();
@@ -75,6 +76,12 @@
     });
   }
 
+  function scheduledWorkSummary() {
+    if (!scheduledWorkItems.length) return null;
+    const complete = scheduledWorkItems.filter((i) => i.status === 'complete').length;
+    return `${complete} of ${scheduledWorkItems.length} scheduled items complete`;
+  }
+
   async function loadProject() {
     const { project } = await api('/projects/' + projectId);
     document.getElementById('project-header').innerHTML = `
@@ -87,6 +94,7 @@
         <div class="timeline-info">
           <strong>${escapeHtml(s.name)}</strong>
           <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
+          ${s.name === 'Installed & Complete' && scheduledWorkSummary() ? `<div class="meta">${scheduledWorkSummary()}</div>` : ''}
         </div>
         <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
       </li>`).join('');
@@ -149,6 +157,7 @@
 
   async function loadScheduledWork() {
     const { items } = await api('/scheduled-work?projectId=' + projectId);
+    scheduledWorkItems = items;
     const el = document.getElementById('scheduled-work-list');
     el.classList.remove('muted');
     if (!items.length) {
