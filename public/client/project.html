@@ -126,18 +126,42 @@
     return `${month}/${day}/${year}`;
   }
 
+  // Tracker descriptions are entered as "CODE — rest of description"
+  // (e.g. "ID11 — Supply & Install SAV returns"). Split the code out so it
+  // can be shown as its own scannable tag instead of buried in the text.
+  function splitSignType(description) {
+    const match = description.match(/^([A-Z0-9]{2,6})\s*—\s*(.+)$/);
+    return match ? { tag: match[1], title: match[2] } : { tag: null, title: description };
+  }
+
+  function renderScheduledItem(i) {
+    const { tag, title } = splitSignType(i.description);
+    return `
+      <div class="list-item">
+        <div>
+          <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}</div>
+          <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}</div>
+        </div>
+        <span class="badge ${i.status}">${i.status}</span>
+      </div>`;
+  }
+
   async function loadScheduledWork() {
     const { items } = await api('/scheduled-work?projectId=' + projectId);
     const el = document.getElementById('scheduled-work-list');
     el.classList.remove('muted');
-    el.innerHTML = items.length ? items.map((i) => `
-      <div class="list-item">
-        <div>
-          <div class="title">${escapeHtml(i.description)}</div>
-          <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}</div>
-        </div>
-        <span class="badge ${i.status}">${i.status}</span>
-      </div>`).join('') : '<p class="muted">No scheduled work yet.</p>';
+    if (!items.length) {
+      el.innerHTML = '<p class="muted">No scheduled work yet.</p>';
+      return;
+    }
+    const upcoming = items.filter((i) => i.status === 'scheduled');
+    const completed = items.filter((i) => i.status === 'complete');
+    el.innerHTML = `
+      <h3 class="section-heading" style="margin-top:0;">Upcoming</h3>
+      ${upcoming.length ? upcoming.map(renderScheduledItem).join('') : '<p class="muted">Nothing scheduled.</p>'}
+      <h3 class="section-heading">Completed</h3>
+      ${completed.length ? completed.map(renderScheduledItem).join('') : '<p class="muted">Nothing completed yet.</p>'}
+    `;
   }
 
   async function loadIssues() {
