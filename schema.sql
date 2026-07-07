@@ -116,6 +116,20 @@ CREATE TABLE IF NOT EXISTS project_issues (
   resolved_at TIMESTAMPTZ
 );
 
+-- Upcoming milestones for a project (e.g. "ceiling signage L23-L28 install"
+-- scheduled for a given date) — the 7-stage timeline is deliberately coarse
+-- and has no room for this level of detail. Team manages these; client and
+-- team both see them (see scheduled-work.js).
+CREATE TABLE IF NOT EXISTS scheduled_work (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  description TEXT NOT NULL,
+  scheduled_date DATE NOT NULL,
+  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'complete')),
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Temporary holding area for large-file uploads. The browser splits a big
 -- file into pieces small enough to fit in a single Netlify Function request
 -- and uploads them here one at a time (upload-chunk.js); once they're all in,

@@ -14,6 +14,7 @@
   <div class="card">
     <div class="tab-bar" id="tab-bar">
       <button class="tab-btn active" data-tab="photos">Photos</button>
+      <button class="tab-btn" data-tab="scheduled-work">Scheduled Work</button>
       <button class="tab-btn" data-tab="client-issues">Client Issues</button>
       <button class="tab-btn" data-tab="supplier-issues">Supplier Issues</button>
       <button class="tab-btn" data-tab="qna">Q&amp;A</button>
@@ -29,6 +30,16 @@
         <p class="muted hidden" id="photo-progress"></p>
       </form>
       <div id="photo-grid" style="margin-top:16px;"></div>
+    </div>
+
+    <div class="tab-panel hidden" data-panel="scheduled-work">
+      <form id="scheduled-work-form">
+        <label>Description<input type="text" name="description" required placeholder="e.g. Ceiling signage install — Levels 23-28"></label>
+        <label>Scheduled date<input type="date" name="scheduledDate" required></label>
+        <div class="actions"><button class="btn secondary" type="submit">Add Scheduled Work</button></div>
+        <div class="error hidden" id="scheduled-work-error"></div>
+      </form>
+      <div id="scheduled-work-list" class="muted" style="margin-top:16px;">Loading…</div>
     </div>
 
     <div class="tab-panel hidden" data-panel="client-issues">
@@ -61,6 +72,7 @@
     initTabs();
     await loadProject();
     await loadPhotos();
+    await loadScheduledWork();
     await loadIssues('client');
     await loadIssues('supplier');
     await loadQna();
@@ -182,6 +194,57 @@
       e.target.reset();
     }
     await loadPhotos();
+  });
+
+  // scheduled_date is a plain DATE column ("YYYY-MM-DD") — format the
+  // string directly rather than going through `new Date()`, which would
+  // apply the browser's timezone and can shift the date by a day.
+  function fmtScheduledDate(value) {
+    if (!value) return '—';
+    const [year, month, day] = String(value).slice(0, 10).split('-');
+    return `${month}/${day}/${year}`;
+  }
+
+  async function loadScheduledWork() {
+    const { items } = await api('/scheduled-work?projectId=' + projectId);
+    const el = document.getElementById('scheduled-work-list');
+    el.classList.remove('muted');
+    el.innerHTML = items.length ? items.map((i) => `
+      <div class="list-item">
+        <div>
+          <div class="title">${escapeHtml(i.description)}</div>
+          <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}</div>
+        </div>
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span class="badge ${i.status}">${i.status}</span>
+          <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'scheduled' ? 'complete' : 'scheduled'}">${i.status === 'scheduled' ? 'Mark Complete' : 'Reopen'}</button>
+        </div>
+      </div>`).join('') : '<p class="muted">No scheduled work yet.</p>';
+
+    el.querySelectorAll('button[data-status]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await api('/scheduled-work/' + btn.dataset.id, { method: 'PATCH', body: { status: btn.dataset.status } });
+        await loadScheduledWork();
+      });
+    });
+  }
+
+  document.getElementById('scheduled-work-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const errorEl = document.getElementById('scheduled-work-error');
+    errorEl.classList.add('hidden');
+    try {
+      await api('/scheduled-work', {
+        method: 'POST',
+        body: { projectId, description: form.get('description'), scheduledDate: form.get('scheduledDate') },
+      });
+      e.target.reset();
+      await loadScheduledWork();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
   });
 
   async function loadIssues(source) {

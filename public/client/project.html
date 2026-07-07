@@ -14,12 +14,17 @@
   <div class="card">
     <div class="tab-bar" id="tab-bar">
       <button class="tab-btn active" data-tab="photos">Photos</button>
+      <button class="tab-btn" data-tab="scheduled-work">Scheduled Work</button>
       <button class="tab-btn" data-tab="issues">Report an Issue</button>
       <button class="tab-btn" data-tab="qna">Q&amp;A</button>
     </div>
 
     <div class="tab-panel" data-panel="photos">
       <div id="photo-grid"></div>
+    </div>
+
+    <div class="tab-panel hidden" data-panel="scheduled-work">
+      <div id="scheduled-work-list" class="muted">Loading…</div>
     </div>
 
     <div class="tab-panel hidden" data-panel="issues">
@@ -54,6 +59,7 @@
     initTabs();
     await loadProject();
     await loadPhotos();
+    await loadScheduledWork();
     await loadIssues();
     await loadQna();
   })();
@@ -109,6 +115,29 @@
             </a>`).join('')}
         </div>
       </div>`).join('');
+  }
+
+  // scheduled_date is a plain DATE column ("YYYY-MM-DD") — format the
+  // string directly rather than going through `new Date()`, which would
+  // apply the browser's timezone and can shift the date by a day.
+  function fmtScheduledDate(value) {
+    if (!value) return '—';
+    const [year, month, day] = String(value).slice(0, 10).split('-');
+    return `${month}/${day}/${year}`;
+  }
+
+  async function loadScheduledWork() {
+    const { items } = await api('/scheduled-work?projectId=' + projectId);
+    const el = document.getElementById('scheduled-work-list');
+    el.classList.remove('muted');
+    el.innerHTML = items.length ? items.map((i) => `
+      <div class="list-item">
+        <div>
+          <div class="title">${escapeHtml(i.description)}</div>
+          <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}</div>
+        </div>
+        <span class="badge ${i.status}">${i.status}</span>
+      </div>`).join('') : '<p class="muted">No scheduled work yet.</p>';
   }
 
   async function loadIssues() {
