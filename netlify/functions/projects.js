@@ -44,7 +44,7 @@ function sanitizeProject(project, role) {
   // neither the client nor the supplier need to see the other party's
   // identity — the agency's supply chain isn't the client's business, and a
   // supplier doesn't need the client's account id.
-  if (role === 'team') return { ...base, client_id: project.client_id, supplier_id: project.supplier_id };
+  if (role === 'team') return { ...base, client_id: project.client_id, supplier_id: project.supplier_id, client_price: project.client_price };
   if (role === 'client') return { ...base, client_price: project.client_price };
   return base;
 }
