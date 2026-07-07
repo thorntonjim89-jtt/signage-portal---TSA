@@ -113,6 +113,11 @@ function fmtDateOnly(value) {
   return new Date(value).toLocaleDateString();
 }
 
+function fmtDateShort(value) {
+  if (!value) return '—';
+  return new Date(value).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+}
+
 function escapeHtml(str) {
   return String(str).replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
