@@ -16,15 +16,11 @@
     </form>
   </div>
 
-  <div class="card">
-    <h2>My Quotes</h2>
-    <div id="quotes-list" class="muted">Loading…</div>
-  </div>
+  <h2 class="section-heading">My Quotes</h2>
+  <div id="quotes-list" class="item-list muted">Loading…</div>
 
-  <div class="card">
-    <h2>My Projects</h2>
-    <div id="projects-list" class="muted">Loading…</div>
-  </div>
+  <h2 class="section-heading">My Projects</h2>
+  <div id="projects-list" class="item-list muted">Loading…</div>
 </main>
 <script src="/js/api.js"></script>
 <script>
@@ -42,7 +38,7 @@
     el.classList.remove('muted');
     if (!quotes.length) { el.innerHTML = '<p class="muted">No quote requests yet.</p>'; return; }
     el.innerHTML = quotes.map((q) => `
-      <a class="list-item" href="/client/quote.html?id=${q.id}">
+      <a class="item-card" href="/client/quote.html?id=${q.id}">
         <div>
           <div class="title">${escapeHtml(q.title)}</div>
           <div class="meta">Requested ${fmtDate(q.created_at)}${q.client_price ? ' &middot; ' + fmtMoney(q.client_price) : ''}</div>
@@ -57,7 +53,7 @@
     el.classList.remove('muted');
     if (!projects.length) { el.innerHTML = '<p class="muted">No active projects yet.</p>'; return; }
     el.innerHTML = projects.map((p) => `
-      <a class="list-item" href="/client/project.html?id=${p.id}">
+      <a class="item-card" href="/client/project.html?id=${p.id}">
         <div>
           <div class="title">${escapeHtml(p.title)}</div>
           <div class="meta">Stage ${p.current_stage} of 7</div>

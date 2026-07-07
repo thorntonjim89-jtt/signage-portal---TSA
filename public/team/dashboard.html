@@ -3,20 +3,14 @@
 <link rel="stylesheet" href="/css/style.css">
 <header class="topbar" id="topbar"></header>
 <main>
-  <div class="card" id="pending-card">
-    <h2>Pending Accounts</h2>
-    <div id="pending-list" class="muted">Loading…</div>
-  </div>
+  <h2 class="section-heading">Pending Accounts</h2>
+  <div id="pending-list" class="item-list muted">Loading…</div>
 
-  <div class="card">
-    <h2>All Quotes</h2>
-    <div id="quotes-list" class="muted">Loading…</div>
-  </div>
+  <h2 class="section-heading">All Quotes</h2>
+  <div id="quotes-list" class="item-list muted">Loading…</div>
 
-  <div class="card">
-    <h2>All Projects</h2>
-    <div id="projects-list" class="muted">Loading…</div>
-  </div>
+  <h2 class="section-heading">All Projects</h2>
+  <div id="projects-list" class="item-list muted">Loading…</div>
 </main>
 <script src="/js/api.js"></script>
 <script>
@@ -34,7 +28,7 @@
     const el = document.getElementById('pending-list');
     el.classList.remove('muted');
     el.innerHTML = users.length ? users.map((u) => `
-      <div class="list-item">
+      <div class="item-card">
         <div>
           <div class="title">${escapeHtml(u.name)} <span class="badge pending">${u.role}</span></div>
           <div class="meta">${escapeHtml(u.email)}${u.company_name ? ' &middot; ' + escapeHtml(u.company_name) : ''} &middot; Requested ${fmtDate(u.created_at)}</div>
@@ -58,7 +52,7 @@
     const el = document.getElementById('quotes-list');
     el.classList.remove('muted');
     el.innerHTML = quotes.length ? quotes.map((q) => `
-      <a class="list-item" href="/team/quote.html?id=${q.id}">
+      <a class="item-card" href="/team/quote.html?id=${q.id}">
         <div>
           <div class="title">${escapeHtml(q.title)}</div>
           <div class="meta">Requested ${fmtDate(q.created_at)}${q.client_price ? ' &middot; client price ' + fmtMoney(q.client_price) : ''}</div>
@@ -72,7 +66,7 @@
     const el = document.getElementById('projects-list');
     el.classList.remove('muted');
     el.innerHTML = projects.length ? projects.map((p) => `
-      <a class="list-item" href="/team/project.html?id=${p.id}">
+      <a class="item-card" href="/team/project.html?id=${p.id}">
         <div>
           <div class="title">${escapeHtml(p.title)}</div>
           <div class="meta">Stage ${p.current_stage} of 7</div>
