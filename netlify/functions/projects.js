@@ -22,14 +22,22 @@ async function assertProjectAccess(user, projectId) {
 
 async function listProjects(user) {
   let result;
+  const select = `SELECT p.*, EXISTS (
+    SELECT 1 FROM project_stages ps WHERE ps.project_id = p.id AND ps.stage_number = 7 AND ps.status = 'complete'
+  ) AS is_complete FROM projects p`;
   if (user.role === 'client') {
-    result = await query('SELECT * FROM projects WHERE client_id = $1 ORDER BY created_at DESC', [user.id]);
+    result = await query(select + ' WHERE p.client_id = $1 ORDER BY p.created_at DESC', [user.id]);
   } else if (user.role === 'supplier') {
-    result = await query('SELECT * FROM projects WHERE supplier_id = $1 ORDER BY created_at DESC', [user.id]);
+    result = await query(select + ' WHERE p.supplier_id = $1 ORDER BY p.created_at DESC', [user.id]);
   } else {
-    result = await query('SELECT * FROM projects ORDER BY created_at DESC');
+    result = await query(select + ' ORDER BY p.created_at DESC');
   }
-  return json(200, { projects: result.rows.map((row) => sanitizeProject(row, user.role)) });
+  return json(200, {
+    projects: result.rows.map((row) => ({
+      ...sanitizeProject(row, user.role),
+      status: row.is_complete ? 'complete' : 'in_progress',
+    })),
+  });
 }
 
 function sanitizeProject(project, role) {
