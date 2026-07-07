@@ -64,15 +64,16 @@
   const projectId = qs('id');
   let currentUser;
   let stages = [];
+  let scheduledWorkItems = [];
 
   (async () => {
     currentUser = await requireRole(['team']);
     if (!currentUser) return;
     renderTopbar(currentUser, 'Signage Portal — Team');
     initTabs();
+    await loadScheduledWork();
     await loadProject();
     await loadPhotos();
-    await loadScheduledWork();
     await loadIssues('client');
     await loadIssues('supplier');
     await loadQna();
@@ -99,6 +100,12 @@
     renderTimeline();
   }
 
+  function scheduledWorkSummary() {
+    if (!scheduledWorkItems.length) return null;
+    const complete = scheduledWorkItems.filter((i) => i.status === 'complete').length;
+    return `${complete} of ${scheduledWorkItems.length} scheduled items complete`;
+  }
+
   function renderTimeline() {
     document.getElementById('timeline').innerHTML = stages.map((s) => `
       <li class="${s.status}">
@@ -106,6 +113,7 @@
         <div class="timeline-info">
           <strong>${escapeHtml(s.name)}</strong>
           <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
+          ${s.name === 'Installed & Complete' && scheduledWorkSummary() ? `<div class="meta">${scheduledWorkSummary()}</div>` : ''}
         </div>
         <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
         <div class="stage-actions">
@@ -231,6 +239,7 @@
 
   async function loadScheduledWork() {
     const { items } = await api('/scheduled-work?projectId=' + projectId);
+    scheduledWorkItems = items;
     const el = document.getElementById('scheduled-work-list');
     el.classList.remove('muted');
     if (!items.length) {
@@ -250,6 +259,7 @@
       btn.addEventListener('click', async () => {
         await api('/scheduled-work/' + btn.dataset.id, { method: 'PATCH', body: { status: btn.dataset.status } });
         await loadScheduledWork();
+        renderTimeline();
       });
     });
   }
@@ -266,6 +276,7 @@
       });
       e.target.reset();
       await loadScheduledWork();
+      renderTimeline();
     } catch (err) {
       errorEl.textContent = err.message;
       errorEl.classList.remove('hidden');
