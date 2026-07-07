@@ -12,29 +12,34 @@
   </div>
 
   <div class="card">
-    <h2>Photos</h2>
-    <div id="photo-grid"></div>
-  </div>
+    <div class="tab-bar" id="tab-bar">
+      <button class="tab-btn active" data-tab="photos">Photos</button>
+      <button class="tab-btn" data-tab="issues">Report an Issue</button>
+      <button class="tab-btn" data-tab="qna">Q&amp;A</button>
+    </div>
 
-  <div class="card">
-    <h2>Report an Issue</h2>
-    <p class="muted">Noticed a problem with the install or the sign itself? Let us know.</p>
-    <form id="issue-form">
-      <label>Description<textarea name="description" rows="2" required placeholder="What's wrong?"></textarea></label>
-      <label>Photo (optional)<input type="file" name="photo" accept="image/*"></label>
-      <div class="actions"><button class="btn secondary" type="submit">Report Issue</button></div>
-      <div class="error hidden" id="issue-error"></div>
-    </form>
-    <div id="issues-list" class="muted" style="margin-top:16px;">Loading…</div>
-  </div>
+    <div class="tab-panel" data-panel="photos">
+      <div id="photo-grid"></div>
+    </div>
 
-  <div class="card">
-    <h2>Questions &amp; Answers</h2>
-    <div class="qna-thread" id="qna-thread"></div>
-    <form id="qna-form">
-      <textarea name="message" rows="2" placeholder="Ask a question about your project..." required></textarea>
-      <div class="actions"><button class="btn" type="submit">Send</button></div>
-    </form>
+    <div class="tab-panel hidden" data-panel="issues">
+      <p class="muted">Noticed a problem with the install or the sign itself? Let us know.</p>
+      <form id="issue-form">
+        <label>Description<textarea name="description" rows="2" required placeholder="What's wrong?"></textarea></label>
+        <label>Photo (optional)<input type="file" name="photo" accept="image/*"></label>
+        <div class="actions"><button class="btn secondary" type="submit">Report Issue</button></div>
+        <div class="error hidden" id="issue-error"></div>
+      </form>
+      <div id="issues-list" class="muted" style="margin-top:16px;">Loading…</div>
+    </div>
+
+    <div class="tab-panel hidden" data-panel="qna">
+      <div class="qna-thread" id="qna-thread"></div>
+      <form id="qna-form">
+        <textarea name="message" rows="2" placeholder="Ask a question about your project..." required></textarea>
+        <div class="actions"><button class="btn" type="submit">Send</button></div>
+      </form>
+    </div>
   </div>
 </main>
 <script src="/js/api.js"></script>
@@ -46,11 +51,23 @@
     currentUser = await requireRole(['client']);
     if (!currentUser) return;
     renderTopbar(currentUser, 'Signage Portal');
+    initTabs();
     await loadProject();
     await loadPhotos();
     await loadIssues();
     await loadQna();
   })();
+
+  function initTabs() {
+    document.querySelectorAll('#tab-bar .tab-btn').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#tab-bar .tab-btn').forEach((b) => b.classList.remove('active'));
+        document.querySelectorAll('.tab-panel').forEach((p) => p.classList.add('hidden'));
+        btn.classList.add('active');
+        document.querySelector(`.tab-panel[data-panel="${btn.dataset.tab}"]`).classList.remove('hidden');
+      });
+    });
+  }
 
   async function loadProject() {
     const { project } = await api('/projects/' + projectId);
