@@ -39,7 +39,11 @@
         <div class="actions"><button class="btn secondary" type="submit">Add Scheduled Work</button></div>
         <div class="error hidden" id="scheduled-work-error"></div>
       </form>
-      <div id="scheduled-work-list" class="muted" style="margin-top:16px;">Loading…</div>
+      <div class="tab-bar" id="scheduled-work-subtabs" style="margin-top:16px;">
+        <button class="tab-btn active" data-subtab="upcoming">Upcoming</button>
+        <button class="tab-btn" data-subtab="completed">Completed</button>
+      </div>
+      <div id="scheduled-work-list" class="muted">Loading…</div>
     </div>
 
     <div class="tab-panel hidden" data-panel="client-issues">
@@ -65,6 +69,22 @@
   let currentUser;
   let stages = [];
   let scheduledWorkItems = [];
+  let allPhotos = [];
+
+  // Photos and scheduled-work items aren't explicitly tagged to a stage, so
+  // infer which stage was active on a given date: whichever stage had the
+  // latest started_at at or before that date.
+  function stageForDate(dateValue, stageList) {
+    if (!dateValue) return null;
+    const t = new Date(dateValue).getTime();
+    let match = null;
+    for (const s of stageList) {
+      if (!s.started_at) continue;
+      const startT = new Date(s.started_at).getTime();
+      if (startT <= t && (!match || startT > new Date(match.started_at).getTime())) match = s;
+    }
+    return match;
+  }
 
   (async () => {
     currentUser = await requireRole(['team']);
@@ -114,6 +134,7 @@
           <strong>${escapeHtml(s.name)}</strong>
           <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
           ${s.name === 'Installed & Complete' && scheduledWorkSummary() ? `<div class="meta">${scheduledWorkSummary()}</div>` : ''}
+          ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button><div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>` : ''}
         </div>
         <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
         <div class="stage-actions">
@@ -122,7 +143,7 @@
         </div>
       </li>`).join('');
 
-    document.querySelectorAll('#timeline button').forEach((btn) => {
+    document.querySelectorAll('#timeline button[data-status]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         await api('/projects/' + projectId, {
           method: 'PATCH',
@@ -131,10 +152,48 @@
         await loadProject();
       });
     });
+
+    document.querySelectorAll('.stage-detail-toggle').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const stageNumber = Number(btn.dataset.stage);
+        const detailEl = document.getElementById('stage-detail-' + stageNumber);
+        const isHidden = detailEl.classList.contains('hidden');
+        if (isHidden) renderStageDetail(stageNumber, detailEl);
+        detailEl.classList.toggle('hidden', !isHidden);
+        btn.textContent = isHidden ? 'Details ▴' : 'Details ▾';
+      });
+    });
+  }
+
+  function renderStageDetail(stageNumber, el) {
+    const stage = stages.find((s) => s.stage_number === stageNumber);
+    const photos = allPhotos.filter((p) => stageForDate(p.created_at, stages) === stage);
+    const items = scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage);
+    const photoHtml = photos.length ? `
+      <div class="photo-grid">
+        ${photos.map((p) => `<a class="photo-thumb" href="/api/photo-file/${p.id}" target="_blank"><img src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}"></a>`).join('')}
+      </div>` : '';
+    const itemsHtml = items.map(renderScheduledItemReadOnly).join('');
+    el.innerHTML = (photoHtml || itemsHtml)
+      ? `${photoHtml}${itemsHtml}`
+      : '<p class="muted" style="margin:10px 0 0;">Nothing logged during this stage yet.</p>';
+  }
+
+  function renderScheduledItemReadOnly(i) {
+    const { tag, title } = splitSignType(i.description);
+    return `
+      <div class="list-item">
+        <div>
+          <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}</div>
+          <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}</div>
+        </div>
+        <span class="badge ${i.status}">${i.status}</span>
+      </div>`;
   }
 
   async function loadPhotos() {
     const { photos } = await api('/photos?projectId=' + projectId);
+    allPhotos = photos;
     const el = document.getElementById('photo-grid');
     if (!photos.length) {
       el.innerHTML = '<p class="muted">No photos uploaded yet.</p>';
@@ -237,23 +296,20 @@
       </div>`;
   }
 
-  async function loadScheduledWork() {
-    const { items } = await api('/scheduled-work?projectId=' + projectId);
-    scheduledWorkItems = items;
+  let scheduledWorkSubtab = 'upcoming';
+
+  function renderScheduledWorkList() {
     const el = document.getElementById('scheduled-work-list');
     el.classList.remove('muted');
-    if (!items.length) {
+    if (!scheduledWorkItems.length) {
       el.innerHTML = '<p class="muted">No scheduled work yet.</p>';
       return;
     }
-    const upcoming = items.filter((i) => i.status === 'scheduled');
-    const completed = items.filter((i) => i.status === 'complete');
-    el.innerHTML = `
-      <h3 class="section-heading" style="margin-top:0;">Upcoming</h3>
-      ${upcoming.length ? upcoming.map(renderScheduledItem).join('') : '<p class="muted">Nothing scheduled.</p>'}
-      <h3 class="section-heading">Completed</h3>
-      ${completed.length ? completed.map(renderScheduledItem).join('') : '<p class="muted">Nothing completed yet.</p>'}
-    `;
+    const wantStatus = scheduledWorkSubtab === 'upcoming' ? 'scheduled' : 'complete';
+    const items = scheduledWorkItems.filter((i) => i.status === wantStatus);
+    el.innerHTML = items.length
+      ? items.map(renderScheduledItem).join('')
+      : `<p class="muted">${scheduledWorkSubtab === 'upcoming' ? 'Nothing scheduled.' : 'Nothing completed yet.'}</p>`;
 
     el.querySelectorAll('button[data-status]').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -262,6 +318,21 @@
         renderTimeline();
       });
     });
+  }
+
+  document.querySelectorAll('#scheduled-work-subtabs .tab-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('#scheduled-work-subtabs .tab-btn').forEach((b) => b.classList.remove('active'));
+      btn.classList.add('active');
+      scheduledWorkSubtab = btn.dataset.subtab;
+      renderScheduledWorkList();
+    });
+  });
+
+  async function loadScheduledWork() {
+    const { items } = await api('/scheduled-work?projectId=' + projectId);
+    scheduledWorkItems = items;
+    renderScheduledWorkList();
   }
 
   document.getElementById('scheduled-work-form').addEventListener('submit', async (e) => {
