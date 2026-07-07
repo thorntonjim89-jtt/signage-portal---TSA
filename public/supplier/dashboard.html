@@ -3,15 +3,11 @@
 <link rel="stylesheet" href="/css/style.css">
 <header class="topbar" id="topbar"></header>
 <main>
-  <div class="card">
-    <h2>My Projects</h2>
-    <div id="projects-list" class="muted">Loading…</div>
-  </div>
+  <h2 class="section-heading">My Projects</h2>
+  <div id="projects-list" class="item-list muted">Loading…</div>
 
-  <div class="card">
-    <h2>Pricing Requests</h2>
-    <div id="requests-list" class="muted">Loading…</div>
-  </div>
+  <h2 class="section-heading">Pricing Requests</h2>
+  <div id="requests-list" class="item-list muted">Loading…</div>
 </main>
 <script src="/js/api.js"></script>
 <script>
@@ -28,7 +24,7 @@
     const el = document.getElementById('projects-list');
     el.classList.remove('muted');
     el.innerHTML = projects.length ? projects.map((p) => `
-      <a class="list-item" href="/supplier/project.html?id=${p.id}">
+      <a class="item-card" href="/supplier/project.html?id=${p.id}">
         <div>
           <div class="title">${escapeHtml(p.title)}</div>
           <div class="meta">Stage ${p.current_stage} of 7</div>
@@ -42,7 +38,7 @@
     const el = document.getElementById('requests-list');
     el.classList.remove('muted');
     el.innerHTML = requests.length ? requests.map((r) => `
-      <a class="list-item" href="/supplier/request.html?id=${r.id}">
+      <a class="item-card" href="/supplier/request.html?id=${r.id}">
         <div>
           <div class="title">Quote #${r.quote_id}</div>
           <div class="meta">Requested ${fmtDate(r.requested_at)}${r.cost_price ? ' &middot; your price ' + fmtMoney(r.cost_price) : ''}</div>
