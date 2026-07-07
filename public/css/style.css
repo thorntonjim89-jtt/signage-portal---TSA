@@ -189,7 +189,8 @@ label {
 .badge.submitted, .badge.requested { background: #f4e6c9; color: #8a6a1f; }
 .badge.pricing { background: #f3e4c4; color: var(--warn); }
 .badge.priced { background: #f3e4c4; color: var(--warn); }
-.badge.accepted, .badge.submitted-cost, .badge.complete, .badge.in_progress { background: #e1ead9; color: var(--success); }
+.badge.in_progress { background: #f3e4c4; color: var(--warn); }
+.badge.accepted, .badge.submitted-cost, .badge.complete { background: #e1ead9; color: var(--success); }
 .badge.declined { background: #f2ded7; color: var(--danger); }
 .badge.converted { background: #e1ead9; color: var(--success); }
 .badge.open { background: #f2ded7; color: var(--danger); }
