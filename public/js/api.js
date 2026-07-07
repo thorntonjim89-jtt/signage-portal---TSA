@@ -85,8 +85,9 @@ function renderTopbar(user, title) {
   el.innerHTML =
     '<a class="brand" href="' + homeFor(user.role) + '"><img src="/images/logo.png" alt="' + escapeHtml(title) + '"></a>' +
     '<div class="who"><span>' + escapeHtml(user.name) + ' &middot; ' + escapeHtml(user.role) + '</span>' +
+    '<div class="who-actions">' +
     '<a class="btn secondary" href="/account.html">Account</a>' +
-    '<button class="btn secondary" id="logout-btn">Log out</button></div>';
+    '<button class="btn secondary" id="logout-btn">Log out</button></div></div>';
   document.getElementById('logout-btn').addEventListener('click', async () => {
     await api('/auth-logout', { method: 'POST' });
     window.location.href = '/index.html';

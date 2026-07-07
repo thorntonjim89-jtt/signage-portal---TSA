@@ -62,10 +62,10 @@ header.topbar .who {
   color: var(--muted);
   margin-left: auto;
 }
+header.topbar .who-actions { display: flex; align-items: center; gap: 10px; flex: 0 0 auto; }
 
 @media (max-width: 640px) {
-  header.topbar .who { width: 100%; margin-left: 0; font-size: 13px; gap: 10px; }
-  header.topbar .who > span { width: 100%; }
+  header.topbar .who { width: 100%; margin-left: 0; font-size: 13px; gap: 10px; justify-content: space-between; }
 }
 
 main {
@@ -181,6 +181,8 @@ form .actions {
   font-weight: 600;
   background: #e7dcc0;
   color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .badge.submitted, .badge.requested { background: #f4e6c9; color: #8a6a1f; }
 .badge.pricing { background: #f3e4c4; color: var(--warn); }
