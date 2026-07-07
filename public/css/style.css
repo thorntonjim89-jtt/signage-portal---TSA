@@ -35,6 +35,8 @@ header.topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
+  row-gap: 10px;
   padding: 14px 24px;
   background: var(--card);
   border-bottom: 1px solid var(--border);
@@ -54,9 +56,16 @@ header.topbar .brand img {
 header.topbar .who {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 14px;
   font-size: 14px;
   color: var(--muted);
+  margin-left: auto;
+}
+
+@media (max-width: 640px) {
+  header.topbar .who { font-size: 13px; gap: 10px; }
+  header.topbar .who > span { width: 100%; }
 }
 
 main {
@@ -74,7 +83,14 @@ main {
   box-shadow: var(--shadow);
 }
 
-.tab-bar { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin-bottom: 18px; flex-wrap: wrap; }
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 18px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 .tab-btn {
   background: none;
   border: none;
@@ -85,6 +101,8 @@ main {
   cursor: pointer;
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 .tab-btn:hover { color: var(--text); }
 .tab-btn.active { color: var(--text); border-bottom-color: var(--accent); }
@@ -209,11 +227,15 @@ table th { color: var(--muted); font-weight: 600; font-size: 12px; text-transfor
 .timeline { list-style: none; padding: 0; margin: 0; }
 .timeline li {
   display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 8px;
   gap: 12px;
   padding: 11px 0;
   border-bottom: 1px solid var(--border);
 }
 .timeline li:last-child { border-bottom: none; }
+.timeline .stage-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-left: auto; }
 .timeline .dot {
   width: 22px;
   height: 22px;
