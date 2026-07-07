@@ -259,7 +259,7 @@ main > .section-heading:first-child { margin-top: 0; }
 .timeline { list-style: none; padding: 0; margin: 0; }
 .timeline li {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   flex-wrap: wrap;
   row-gap: 8px;
   gap: 12px;
@@ -280,6 +280,7 @@ main > .section-heading:first-child { margin-top: 0; }
   font-size: 12px;
   color: var(--muted);
   font-weight: 700;
+  margin-top: 2px;
 }
 .timeline li.complete .dot { background: var(--success); color: #fff; }
 .timeline li.in_progress .dot { background: var(--accent); color: #fff; }
