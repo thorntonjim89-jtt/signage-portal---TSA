@@ -95,7 +95,7 @@
           <div><strong>${escapeHtml(s.name)}</strong> <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span></div>
           <div class="meta muted">${s.completed_at ? 'Completed ' + fmtDate(s.completed_at) : s.started_at ? 'Started ' + fmtDate(s.started_at) : ''}</div>
         </div>
-        <div>
+        <div class="stage-actions">
           ${s.status !== 'in_progress' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="in_progress">Start</button>` : ''}
           ${s.status !== 'complete' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="complete">Complete</button>` : ''}
         </div>
