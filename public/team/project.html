@@ -245,13 +245,19 @@
     for (let i = 0; i < files.length; i += 1) {
       const file = files[i];
       progressEl.textContent = `Uploading ${i + 1} of ${files.length} (${file.name})…`;
+      // If a date wasn't explicitly set (to apply to the whole batch), fall
+      // back to each file's own last-modified date — for photos coming
+      // straight off a phone/camera this is usually the date it was taken,
+      // so a bulk upload of older site photos still sorts by their real
+      // dates instead of every photo landing on today's upload date.
+      const fileTakenAt = takenAt || (file.lastModified ? new Date(file.lastModified).toISOString().slice(0, 10) : undefined);
       try {
         await uploadFileInChunks(file, {
           kind: 'photo',
           projectId,
           contentType: file.type,
           caption: caption || undefined,
-          takenAt: takenAt || undefined,
+          takenAt: fileTakenAt,
         });
       } catch (err) {
         failed.push(`${file.name}: ${err.message}`);
