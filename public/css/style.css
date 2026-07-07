@@ -196,6 +196,7 @@ label {
 .badge.open { background: #f2ded7; color: var(--danger); }
 .badge.resolved { background: #e1ead9; color: var(--success); }
 .badge.pending { background: #e7dcc0; color: var(--muted); }
+.badge.scheduled { background: var(--accent-tint); color: var(--accent-dark); }
 
 .tag {
   display: inline-block;
@@ -284,6 +285,21 @@ main > .section-heading:first-child { margin-top: 0; }
 .timeline-info { flex: 1 1 200px; min-width: 0; }
 .timeline .meta { margin-top: 3px; font-size: 13px; color: var(--text); opacity: 0.75; }
 .timeline .stage-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.stage-detail-toggle {
+  display: block;
+  background: none;
+  border: none;
+  padding: 0;
+  margin-top: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+.stage-detail-toggle:hover { color: var(--accent-dark); }
+.stage-detail { margin-top: 10px; }
+.stage-detail .photo-grid { margin-bottom: 10px; }
+.stage-detail .list-item { padding: 9px 0; }
 .timeline .dot {
   width: 22px;
   height: 22px;
