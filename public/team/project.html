@@ -103,10 +103,11 @@
     document.getElementById('timeline').innerHTML = stages.map((s) => `
       <li class="${s.status}">
         <span class="dot">${s.status === 'complete' ? '✓' : s.stage_number}</span>
-        <div style="flex:1;">
-          <div><strong>${escapeHtml(s.name)}</strong> <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span></div>
-          <div class="meta muted">${s.completed_at ? 'Completed ' + fmtDate(s.completed_at) : s.started_at ? 'Started ' + fmtDate(s.started_at) : ''}</div>
+        <div class="timeline-info">
+          <strong>${escapeHtml(s.name)}</strong>
+          <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
         </div>
+        <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
         <div class="stage-actions">
           ${s.status !== 'in_progress' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="in_progress">Start</button>` : ''}
           ${s.status !== 'complete' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="complete">Complete</button>` : ''}
