@@ -171,7 +171,11 @@
     const items = scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage);
     const photoHtml = photos.length ? `
       <div class="photo-grid">
-        ${photos.map((p) => `<a class="photo-thumb" href="/api/photo-file/${p.id}" target="_blank"><img src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}"></a>`).join('')}
+        ${photos.map((p) => `
+          <a class="photo-thumb" href="/api/photo-file/${p.id}" target="_blank">
+            <img src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}">
+            <span class="photo-caption">📅 ${fmtDateShort(p.created_at)}${p.caption ? ' &middot; ' + escapeHtml(p.caption) : ''}</span>
+          </a>`).join('')}
       </div>` : '';
     const itemsHtml = items.map(renderScheduledItemReadOnly).join('');
     el.innerHTML = (photoHtml || itemsHtml)
