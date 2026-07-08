@@ -71,7 +71,7 @@ exports.handler = withErrorHandling(async (event) => {
   }
 
   const { uploadId, kind } = data;
-  if (!uploadId || !['photo', 'quote-file', 'issue-photo'].includes(kind)) {
+  if (!uploadId || !['photo', 'quote-file', 'issue-photo', 'design-pack'].includes(kind)) {
     return json(400, { error: 'uploadId and a valid kind are required' });
   }
 
@@ -118,6 +118,25 @@ exports.handler = withErrorHandling(async (event) => {
        VALUES ($1, $2, $3, $4, $5)
        RETURNING id, quote_id, uploaded_by, filename, content_type, created_at`,
       [quoteId, user.id, buffer, filename, contentType]
+    );
+    await cleanupChunks(uploadId);
+    return json(201, { file: result.rows[0] });
+  }
+
+  if (kind === 'design-pack') {
+    if (user.role !== 'team') return json(403, { error: 'Only team can upload a design pack' });
+    const { projectId, filename, contentType } = data;
+    if (!projectId || !filename || !contentType) {
+      return json(400, { error: 'projectId, filename and contentType are required' });
+    }
+    const project = await assertProjectAccess(user, projectId);
+    if (!project) return json(403, { error: 'Forbidden' });
+
+    const result = await query(
+      `INSERT INTO design_packs (project_id, uploaded_by, file_data, filename, content_type)
+       VALUES ($1, $2, $3, $4, $5)
+       RETURNING id, project_id, uploaded_by, filename, content_type, created_at`,
+      [projectId, user.id, buffer, filename, contentType]
     );
     await cleanupChunks(uploadId);
     return json(201, { file: result.rows[0] });
