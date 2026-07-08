@@ -91,6 +91,19 @@ CREATE TABLE IF NOT EXISTS quote_attachments (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Team-uploaded design reference material (mockups, renders, PDFs) shown
+-- under the Design & Proofing stage, for the client to review alongside
+-- their approval — distinct from the client's own quote-request attachments.
+CREATE TABLE IF NOT EXISTS design_packs (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  uploaded_by INTEGER NOT NULL REFERENCES users(id),
+  file_data BYTEA NOT NULL,
+  filename TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS qna_messages (
   id SERIAL PRIMARY KEY,
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,

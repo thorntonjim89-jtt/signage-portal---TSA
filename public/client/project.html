@@ -58,6 +58,13 @@
   let scheduledWorkItems = [];
   let stages = [];
   let allPhotos = [];
+  let designPacks = [];
+
+  // Photos are installation-site evidence, so only surface them under the
+  // stages that are actually about physical install/QC/shipping work — they
+  // looked out of place under Order Confirmed/Design & Proofing/Client
+  // Approval, which are about the paperwork side of the project.
+  const INSTALLATION_STAGES = ['Production', 'Quality Check', 'Shipping', 'Installed & Complete'];
 
   // Photos and scheduled-work items aren't explicitly tagged to a stage, so
   // infer which stage was active on a given date: whichever stage had the
@@ -74,12 +81,18 @@
     return match;
   }
 
+  async function loadDesignPacks() {
+    const { files } = await api('/design-packs?projectId=' + projectId);
+    designPacks = files;
+  }
+
   (async () => {
     currentUser = await requireRole(['client']);
     if (!currentUser) return;
     renderTopbar(currentUser, 'Signage Portal');
     initTabs();
     await loadScheduledWork();
+    await loadDesignPacks();
     await loadProject();
     await loadPhotos();
     await loadIssues();
@@ -136,19 +149,35 @@
 
   function renderStageDetail(stageNumber, el) {
     const stage = stages.find((s) => s.stage_number === stageNumber);
-    const photos = allPhotos.filter((p) => stageForDate(p.created_at, stages) === stage);
     const items = scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage);
-    const photoHtml = photos.length ? `
-      <div class="photo-grid">
-        ${photos.map((p) => `
-          <a class="photo-thumb" href="/api/photo-file/${p.id}" target="_blank">
-            <img src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}">
-            <span class="photo-caption">📅 ${fmtDateShort(p.created_at)}${p.caption ? ' &middot; ' + escapeHtml(p.caption) : ''}</span>
-          </a>`).join('')}
-      </div>` : '';
     const itemsHtml = items.map(renderScheduledItemReadOnly).join('');
-    el.innerHTML = (photoHtml || itemsHtml)
-      ? `${photoHtml}${itemsHtml}`
+
+    let photoHtml = '';
+    if (INSTALLATION_STAGES.includes(stage.name)) {
+      const photos = allPhotos.filter((p) => stageForDate(p.created_at, stages) === stage);
+      photoHtml = photos.length ? `
+        <div class="photo-grid">
+          ${photos.map((p) => `
+            <a class="photo-thumb" href="/api/photo-file/${p.id}" target="_blank">
+              <img src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}">
+              <span class="photo-caption">📅 ${fmtDateShort(p.created_at)}${p.caption ? ' &middot; ' + escapeHtml(p.caption) : ''}</span>
+            </a>`).join('')}
+        </div>` : '';
+    }
+
+    let designPackHtml = '';
+    if (stage.name === 'Design & Proofing') {
+      designPackHtml = designPacks.length ? `
+        <div class="design-pack-section">
+          ${designPacks.map((f) => `
+            <a class="list-item" href="/api/design-pack-file/${f.id}" target="_blank">
+              <div><div class="title">📎 ${escapeHtml(f.filename)}</div><div class="meta">Uploaded ${fmtDateShort(f.created_at)}</div></div>
+            </a>`).join('')}
+        </div>` : '';
+    }
+
+    el.innerHTML = (photoHtml || itemsHtml || designPackHtml)
+      ? `${designPackHtml}${photoHtml}${itemsHtml}`
       : '<p class="muted" style="margin:10px 0 0;">Nothing logged during this stage yet.</p>';
   }
 

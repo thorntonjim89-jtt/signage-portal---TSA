@@ -300,6 +300,8 @@ main > .section-heading:first-child { margin-top: 0; }
 .stage-detail { margin-top: 10px; }
 .stage-detail .photo-grid { margin-bottom: 10px; }
 .stage-detail .list-item { padding: 9px 0; }
+.design-pack-section { margin-bottom: 10px; }
+.design-pack-section form { margin-top: 10px; }
 .timeline .dot {
   width: 22px;
   height: 22px;
