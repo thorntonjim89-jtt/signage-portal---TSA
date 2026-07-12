@@ -15,6 +15,7 @@
     <div class="tab-bar" id="tab-bar">
       <button class="tab-btn active" data-tab="photos">Photos</button>
       <button class="tab-btn" data-tab="scheduled-work">Scheduled Work</button>
+      <button class="tab-btn" data-tab="documents">Documents</button>
       <button class="tab-btn" data-tab="issues">Report an Issue</button>
       <button class="tab-btn" data-tab="qna">Q&amp;A</button>
     </div>
@@ -29,6 +30,15 @@
         <button class="tab-btn" data-subtab="completed">Completed</button>
       </div>
       <div id="scheduled-work-list" class="muted">Loading…</div>
+    </div>
+
+    <div class="tab-panel hidden" data-panel="documents">
+      <form id="document-form">
+        <label>Document<input type="file" name="document" required></label>
+        <div class="actions"><button class="btn secondary" type="submit">Upload Document</button></div>
+        <div class="error hidden" id="document-error"></div>
+      </form>
+      <div id="document-list" class="muted" style="margin-top:16px;">Loading…</div>
     </div>
 
     <div class="tab-panel hidden" data-panel="issues">
@@ -95,6 +105,7 @@
     await loadDesignPacks();
     await loadProject();
     await loadPhotos();
+    await loadDocuments();
     await loadIssues();
     await loadQna();
   })();
@@ -279,6 +290,45 @@
     scheduledWorkItems = items;
     renderScheduledWorkList();
   }
+
+  async function loadDocuments() {
+    const { files } = await api('/project-documents?projectId=' + projectId);
+    const el = document.getElementById('document-list');
+    el.classList.remove('muted');
+    el.innerHTML = files.length ? files.map((f) => `
+      <a class="list-item" href="/api/project-document-file/${f.id}" target="_blank">
+        <div>
+          <div class="title">📎 ${escapeHtml(f.filename)}</div>
+          <div class="meta">Uploaded by ${escapeHtml(f.uploaded_by_name)} (${f.uploaded_by_role}) &middot; ${fmtDateShort(f.created_at)}</div>
+        </div>
+      </a>`).join('') : '<p class="muted">No documents uploaded yet.</p>';
+  }
+
+  document.getElementById('document-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const file = document.querySelector('#document-form input[name=document]').files[0];
+    const errorEl = document.getElementById('document-error');
+    errorEl.classList.add('hidden');
+    if (!file) return;
+    if (fileTooLarge(file)) {
+      errorEl.textContent = `"${file.name}" is larger than 50MB — please attach a smaller file.`;
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    try {
+      await uploadFileInChunks(file, {
+        kind: 'project-document',
+        projectId,
+        filename: file.name,
+        contentType: file.type || 'application/octet-stream',
+      });
+      e.target.reset();
+      await loadDocuments();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
 
   async function loadIssues() {
     const { issues } = await api('/project-issues?projectId=' + projectId + '&source=client');

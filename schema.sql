@@ -104,6 +104,19 @@ CREATE TABLE IF NOT EXISTS design_packs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- General-purpose project document library (specs, contracts, trackers, RFI
+-- logs, etc.) — not tied to any one stage. Both team and client can upload,
+-- unlike design_packs which is team-only.
+CREATE TABLE IF NOT EXISTS project_documents (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  uploaded_by INTEGER NOT NULL REFERENCES users(id),
+  file_data BYTEA NOT NULL,
+  filename TEXT NOT NULL,
+  content_type TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS qna_messages (
   id SERIAL PRIMARY KEY,
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
