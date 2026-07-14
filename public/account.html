@@ -6,6 +6,18 @@
   <p><a href="/" id="back-link">&larr; Back to dashboard</a></p>
 
   <div class="card">
+    <h2>Profile Details</h2>
+    <form id="profile-form">
+      <label>Name<input type="text" name="name" required></label>
+      <label id="company-field" class="hidden">Company<input type="text" name="companyName"></label>
+      <label>Email<input type="email" name="email" required></label>
+      <div class="actions"><button class="btn" type="submit">Save Profile</button></div>
+      <div class="error hidden" id="profile-error"></div>
+      <p class="success-text hidden" id="profile-success">Profile updated.</p>
+    </form>
+  </div>
+
+  <div class="card">
     <h2>Change Password</h2>
     <form id="password-form">
       <label>Current password<input type="password" name="currentPassword" required></label>
@@ -24,7 +36,35 @@
     if (!user) return;
     renderTopbar(user, 'Signage Portal');
     document.getElementById('back-link').href = homeFor(user.role);
+
+    const form = document.getElementById('profile-form');
+    form.name.value = user.name;
+    form.email.value = user.email;
+    if (user.role !== 'team') {
+      document.getElementById('company-field').classList.remove('hidden');
+      form.companyName.value = user.company_name || '';
+    }
   })();
+
+  document.getElementById('profile-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const errorEl = document.getElementById('profile-error');
+    const successEl = document.getElementById('profile-success');
+    errorEl.classList.add('hidden');
+    successEl.classList.add('hidden');
+
+    try {
+      await api('/me', {
+        method: 'PATCH',
+        body: { name: form.get('name'), companyName: form.get('companyName') || undefined, email: form.get('email') },
+      });
+      successEl.classList.remove('hidden');
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
 
   document.getElementById('password-form').addEventListener('submit', async (e) => {
     e.preventDefault();
