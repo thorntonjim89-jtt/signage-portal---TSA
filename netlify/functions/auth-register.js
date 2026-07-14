@@ -32,12 +32,25 @@ exports.handler = withErrorHandling(async (event) => {
 
   const normalizedEmail = email.toLowerCase().trim();
 
-  const existing = await query('SELECT id FROM users WHERE email = $1', [normalizedEmail]);
-  if (existing.rows.length) {
-    return json(409, { error: 'An account with this email already exists' });
-  }
-
+  const existing = await query('SELECT id, status FROM users WHERE email = $1', [normalizedEmail]);
   const passwordHash = await bcrypt.hash(password, 10);
+
+  if (existing.rows.length) {
+    // A rejected application shouldn't permanently block that email — treat
+    // a fresh registration attempt as a resubmission with updated details
+    // instead of leaving the applicant stuck forever. Pending/approved
+    // accounts still block as before.
+    if (existing.rows[0].status !== 'rejected') {
+      return json(409, { error: 'An account with this email already exists' });
+    }
+    const result = await query(
+      `UPDATE users SET password_hash = $1, name = $2, role = $3, company_name = $4, status = 'pending'
+       WHERE id = $5
+       RETURNING id, email, name, role, company_name, status, created_at`,
+      [passwordHash, name, role, companyName || null, existing.rows[0].id]
+    );
+    return json(201, { user: result.rows[0] });
+  }
 
   const result = await query(
     `INSERT INTO users (email, password_hash, name, role, company_name, status)
