@@ -57,10 +57,11 @@
       <div class="list-item">
         <div>
           <div class="title">${escapeHtml(i.description)}</div>
-          <div class="meta">${fmtDate(i.created_at)}${i.has_photo ? ' &middot; <a href="/api/project-issue-file/' + i.id + '" target="_blank">photo</a>' : ''}</div>
+          <div class="meta">${fmtDate(i.created_at)}${i.has_photo ? ' &middot; <a href="#" data-file-url="/api/project-issue-file/' + i.id + '">photo</a>' : ''}</div>
         </div>
         <span class="badge ${i.status}">${i.status}</span>
       </div>`).join('') : '<p class="muted">No issues reported.</p>';
+    wireFileLinks(el);
   }
 
   document.getElementById('issue-form').addEventListener('submit', async (e) => {

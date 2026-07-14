@@ -1,5 +1,6 @@
 const { query } = require('./utils/db');
 const { getUserFromEvent, getIdFromPath, withErrorHandling } = require('./utils/auth');
+const { serveFile } = require('./utils/fileServing');
 
 exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
@@ -22,13 +23,6 @@ exports.handler = withErrorHandling(async (event) => {
     (user.role === 'supplier' && issue.source === 'supplier' && project.supplier_id === user.id);
   if (!allowed) return { statusCode: 403, body: 'Forbidden' };
 
-  return {
-    statusCode: 200,
-    headers: {
-      'Content-Type': issue.content_type || 'application/octet-stream',
-      'Cache-Control': 'private, max-age=3600',
-    },
-    body: Buffer.from(issue.file_data).toString('base64'),
-    isBase64Encoded: true,
-  };
+  const part = event.queryStringParameters && event.queryStringParameters.part;
+  return serveFile(issue, part);
 });

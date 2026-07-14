@@ -169,8 +169,8 @@
       photoHtml = photos.length ? `
         <div class="photo-grid">
           ${photos.map((p) => `
-            <a class="photo-thumb" href="/api/photo-file/${p.id}" target="_blank">
-              <img src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}">
+            <a class="photo-thumb" href="#" data-file-url="/api/photo-file/${p.id}">
+              <img data-src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}">
               <span class="photo-caption">📅 ${fmtDateShort(p.created_at)}${p.caption ? ' &middot; ' + escapeHtml(p.caption) : ''}</span>
             </a>`).join('')}
         </div>` : '';
@@ -181,7 +181,7 @@
       designPackHtml = designPacks.length ? `
         <div class="design-pack-section">
           ${designPacks.map((f) => `
-            <a class="list-item" href="/api/design-pack-file/${f.id}" target="_blank">
+            <a class="list-item" href="#" data-file-url="/api/design-pack-file/${f.id}">
               <div><div class="title">📎 ${escapeHtml(f.filename)}</div><div class="meta">Uploaded ${fmtDateShort(f.created_at)}</div></div>
             </a>`).join('')}
         </div>` : '';
@@ -190,6 +190,7 @@
     el.innerHTML = (photoHtml || itemsHtml || designPackHtml)
       ? `${designPackHtml}${photoHtml}${itemsHtml}`
       : '<p class="muted" style="margin:10px 0 0;">Nothing logged during this stage yet.</p>';
+    wireFileLinks(el);
   }
 
   function renderScheduledItemReadOnly(i) {
@@ -223,12 +224,13 @@
         <h3 class="photo-day-heading">${escapeHtml(day)}</h3>
         <div class="photo-grid">
           ${items.map((p) => `
-            <a class="photo-thumb" href="/api/photo-file/${p.id}" target="_blank">
-              <img src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}">
+            <a class="photo-thumb" href="#" data-file-url="/api/photo-file/${p.id}">
+              <img data-src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}">
               ${p.caption ? `<span class="photo-caption">${escapeHtml(p.caption)}</span>` : ''}
             </a>`).join('')}
         </div>
       </div>`).join('');
+    wireFileLinks(el);
   }
 
   // scheduled_date is a plain DATE column ("YYYY-MM-DD") — format the
@@ -296,12 +298,13 @@
     const el = document.getElementById('document-list');
     el.classList.remove('muted');
     el.innerHTML = files.length ? files.map((f) => `
-      <a class="list-item" href="/api/project-document-file/${f.id}" target="_blank">
+      <a class="list-item" href="#" data-file-url="/api/project-document-file/${f.id}">
         <div>
           <div class="title">📎 ${escapeHtml(f.filename)}</div>
           <div class="meta">Uploaded by ${escapeHtml(f.uploaded_by_name)} (${f.uploaded_by_role}) &middot; ${fmtDateShort(f.created_at)}</div>
         </div>
       </a>`).join('') : '<p class="muted">No documents uploaded yet.</p>';
+    wireFileLinks(el);
   }
 
   document.getElementById('document-form').addEventListener('submit', async (e) => {
@@ -338,10 +341,11 @@
       <div class="list-item">
         <div>
           <div class="title">${escapeHtml(i.description)}</div>
-          <div class="meta">${fmtDate(i.created_at)}${i.has_photo ? ' &middot; <a href="/api/project-issue-file/' + i.id + '" target="_blank">photo</a>' : ''}</div>
+          <div class="meta">${fmtDate(i.created_at)}${i.has_photo ? ' &middot; <a href="#" data-file-url="/api/project-issue-file/' + i.id + '">photo</a>' : ''}</div>
         </div>
         <span class="badge ${i.status}">${i.status}</span>
       </div>`).join('') : '<p class="muted">No issues reported.</p>';
+    wireFileLinks(el);
   }
 
   document.getElementById('issue-form').addEventListener('submit', async (e) => {

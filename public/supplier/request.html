@@ -89,12 +89,13 @@
     el.classList.remove('muted');
     el.innerHTML = files.length
       ? files.map((f) => `
-        <a class="list-item" href="/api/quote-file/${f.id}" target="_blank">
+        <a class="list-item" href="#" data-file-url="/api/quote-file/${f.id}">
           <div>
             <div class="title">${escapeHtml(f.filename)}</div>
             <div class="meta">Uploaded ${fmtDate(f.created_at)}</div>
           </div>
         </a>`).join('')
       : '<p class="muted">No documents uploaded yet.</p>';
+    wireFileLinks(el);
   }
 </script>
