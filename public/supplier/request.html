@@ -92,7 +92,7 @@
         <a class="list-item" href="#" data-file-url="/api/quote-file/${f.id}">
           <div>
             <div class="title">${escapeHtml(f.filename)}</div>
-            <div class="meta">Uploaded ${fmtDate(f.created_at)}</div>
+            <div class="meta">Uploaded by ${escapeHtml(f.uploaded_by_name)} (${f.uploaded_by_role}) &middot; ${fmtDate(f.created_at)}</div>
           </div>
         </a>`).join('')
       : '<p class="muted">No documents uploaded yet.</p>';

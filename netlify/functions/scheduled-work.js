@@ -81,6 +81,14 @@ async function updateScheduledWork(user, id, event) {
   return json(200, { item: result.rows[0] });
 }
 
+async function deleteScheduledWork(user, id) {
+  if (user.role !== 'team') return json(403, { error: 'Only team can delete scheduled work' });
+
+  const result = await query('DELETE FROM scheduled_work WHERE id = $1 RETURNING id', [id]);
+  if (!result.rows.length) return json(404, { error: 'Scheduled work item not found' });
+  return json(200, { ok: true });
+}
+
 exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return json(401, { error: 'Not authenticated' });
@@ -90,6 +98,7 @@ exports.handler = withErrorHandling(async (event) => {
   if (event.httpMethod === 'GET' && !id) return listScheduledWork(user, event);
   if (event.httpMethod === 'POST' && !id) return createScheduledWork(user, event);
   if (event.httpMethod === 'PATCH' && id) return updateScheduledWork(user, id, event);
+  if (event.httpMethod === 'DELETE' && id) return deleteScheduledWork(user, id);
 
   return json(405, { error: 'Method not allowed' });
 });
