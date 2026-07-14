@@ -37,6 +37,53 @@ async function uploadFileInChunks(file, finalizeBody) {
   return api('/upload-finalize', { method: 'POST', body: { uploadId, ...finalizeBody } });
 }
 
+// Mirrors fileServing.js on the server: a file at or under its safe size
+// comes back as a normal binary response (X-File-Chunked: false or absent).
+// A larger file instead requires fetching a small JSON manifest first, then
+// each part in turn, reassembled here into one Blob — see serveFile() in
+// netlify/functions/utils/fileServing.js for why this exists (Netlify
+// Functions cap a response at 6MB, which base64 inflation eats into fast).
+async function fetchFileBlob(url) {
+  const res = await fetch(url, { credentials: 'include' });
+  if (!res.ok) throw new Error('Failed to load file (' + res.status + ')');
+  if (res.headers.get('X-File-Chunked') !== 'true') return res.blob();
+
+  const manifest = await res.json();
+  const sep = url.includes('?') ? '&' : '?';
+  const buffers = [];
+  for (let i = 0; i < manifest.totalParts; i += 1) {
+    const partRes = await fetch(`${url}${sep}part=${i}`, { credentials: 'include' });
+    if (!partRes.ok) throw new Error('Failed to load file (' + partRes.status + ')');
+    buffers.push(await partRes.arrayBuffer());
+  }
+  return new Blob(buffers, { type: manifest.contentType });
+}
+
+async function openFile(url) {
+  const blob = await fetchFileBlob(url);
+  window.open(URL.createObjectURL(blob), '_blank');
+}
+
+// Wires up every `[data-file-url]` element within `container`: an `<img
+// data-src>` nested inside one gets its src lazily populated from the fetched
+// blob, and clicking the element itself opens the file via openFile() instead
+// of relying on a plain <a href> (which can't work once a file needs
+// chunked fetching). Call this once after inserting markup built from
+// photos/design packs/documents/quote files/issue photos.
+function wireFileLinks(container) {
+  container.querySelectorAll('[data-file-url]').forEach((el) => {
+    const url = el.dataset.fileUrl;
+    const img = el.querySelector && el.querySelector('img[data-src]');
+    if (img) {
+      fetchFileBlob(url).then((blob) => { img.src = URL.createObjectURL(blob); }).catch(() => {});
+    }
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      openFile(url);
+    });
+  });
+}
+
 async function api(path, options) {
   const opts = Object.assign({ credentials: 'include', headers: {} }, options || {});
   if (opts.body && typeof opts.body !== 'string') {
