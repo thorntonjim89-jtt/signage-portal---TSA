@@ -60,13 +60,53 @@
 
   async function load() {
     const { quote } = await api('/quotes/' + quoteId);
+    const editButton = quote.status !== 'converted'
+      ? '<div class="actions"><button class="btn secondary" type="button" id="edit-toggle-btn">Edit Details</button></div>'
+      : '';
     document.getElementById('quote-card').innerHTML = `
       <h2>${escapeHtml(quote.title)} <span class="badge ${quote.status}">${quote.status}</span></h2>
       <p class="muted">${escapeHtml(quote.description || '')}</p>
       <p><strong>Quantity:</strong> ${quote.quantity}</p>
       <p><strong>Internal cost:</strong> ${fmtMoney(quote.internal_cost)} &middot; <strong>Markup:</strong> ${quote.internal_markup_percent != null ? quote.internal_markup_percent + '%' : '—'}</p>
       <p><strong>Client price:</strong> ${fmtMoney(quote.client_price)}</p>
+      ${editButton}
+      <div id="edit-form-wrap" class="hidden">
+        <form id="edit-form">
+          <label>Title<input type="text" name="title" required value="${escapeHtml(quote.title)}"></label>
+          <label>Description<textarea name="description" rows="3">${escapeHtml(quote.description || '')}</textarea></label>
+          <label>Quantity<input type="number" name="quantity" min="1" value="${quote.quantity}"></label>
+          <div class="actions">
+            <button class="btn secondary" type="submit">Save Changes</button>
+            <button class="btn secondary" type="button" id="edit-cancel-btn">Cancel</button>
+          </div>
+          <div class="error hidden" id="edit-error"></div>
+        </form>
+      </div>
     `;
+    if (document.getElementById('edit-toggle-btn')) {
+      document.getElementById('edit-toggle-btn').addEventListener('click', () => {
+        document.getElementById('edit-form-wrap').classList.toggle('hidden');
+      });
+      document.getElementById('edit-cancel-btn').addEventListener('click', () => {
+        document.getElementById('edit-form-wrap').classList.add('hidden');
+      });
+      document.getElementById('edit-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = new FormData(e.target);
+        const errorEl = document.getElementById('edit-error');
+        errorEl.classList.add('hidden');
+        try {
+          await api('/quotes/' + quoteId, {
+            method: 'PATCH',
+            body: { action: 'edit', title: form.get('title'), description: form.get('description'), quantity: Number(form.get('quantity')) || 1 },
+          });
+          await load();
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.classList.remove('hidden');
+        }
+      });
+    }
     document.getElementById('convert-card').classList.toggle('hidden', quote.status !== 'accepted');
     await loadSupplierRequests();
     await loadFiles();
