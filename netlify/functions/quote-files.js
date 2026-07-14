@@ -1,5 +1,5 @@
 const { query } = require('./utils/db');
-const { getUserFromEvent, json, withErrorHandling } = require('./utils/auth');
+const { getUserFromEvent, json, getIdFromPath, withErrorHandling } = require('./utils/auth');
 
 // Uploads themselves go through upload-chunk.js + upload-finalize.js (kind:
 // 'quote-file') so a large document doesn't have to fit in a single function
@@ -28,17 +28,39 @@ async function listFiles(user, event) {
   if (!quote) return json(403, { error: 'Forbidden' });
 
   const result = await query(
-    'SELECT id, quote_id, uploaded_by, filename, content_type, created_at FROM quote_attachments WHERE quote_id = $1 ORDER BY created_at DESC',
+    `SELECT qa.id, qa.quote_id, qa.uploaded_by, u.name AS uploaded_by_name, u.role AS uploaded_by_role,
+            qa.filename, qa.content_type, qa.created_at
+     FROM quote_attachments qa
+     JOIN users u ON u.id = qa.uploaded_by
+     WHERE qa.quote_id = $1
+     ORDER BY qa.created_at DESC`,
     [quoteId]
   );
   return json(200, { files: result.rows });
+}
+
+async function deleteFile(user, id) {
+  if (user.role === 'supplier') return json(403, { error: 'Forbidden' });
+
+  const result = await query('SELECT * FROM quote_attachments WHERE id = $1', [id]);
+  const file = result.rows[0];
+  if (!file) return json(404, { error: 'File not found' });
+  if (user.role !== 'team' && file.uploaded_by !== user.id) {
+    return json(403, { error: 'You can only delete files you uploaded' });
+  }
+
+  await query('DELETE FROM quote_attachments WHERE id = $1', [id]);
+  return json(200, { ok: true });
 }
 
 exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return json(401, { error: 'Not authenticated' });
 
-  if (event.httpMethod === 'GET') return listFiles(user, event);
+  const id = getIdFromPath(event, 'quote-files');
+
+  if (event.httpMethod === 'GET' && !id) return listFiles(user, event);
+  if (event.httpMethod === 'DELETE' && id) return deleteFile(user, id);
 
   return json(405, { error: 'Method not allowed' });
 });

@@ -78,14 +78,23 @@
     el.classList.remove('muted');
     el.innerHTML = files.length
       ? files.map((f) => `
-        <a class="list-item" href="#" data-file-url="/api/quote-file/${f.id}">
-          <div>
+        <div class="list-item">
+          <a class="file-link" href="#" data-file-url="/api/quote-file/${f.id}">
             <div class="title">${escapeHtml(f.filename)}</div>
-            <div class="meta">Uploaded ${fmtDate(f.created_at)}</div>
-          </div>
-        </a>`).join('')
+            <div class="meta">Uploaded by ${escapeHtml(f.uploaded_by_name)} (${f.uploaded_by_role}) &middot; ${fmtDate(f.created_at)}</div>
+          </a>
+          <button type="button" class="btn danger" data-delete-file="${f.id}">Delete</button>
+        </div>`).join('')
       : '<p class="muted">No documents uploaded yet.</p>';
     wireFileLinks(el);
+
+    el.querySelectorAll('button[data-delete-file]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this document? This cannot be undone.')) return;
+        await api('/quote-files/' + btn.dataset.deleteFile, { method: 'DELETE' });
+        await loadFiles();
+      });
+    });
   }
 
   document.getElementById('file-form').addEventListener('submit', async (e) => {

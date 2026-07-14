@@ -212,9 +212,13 @@
       designPackHtml = `
         <div class="design-pack-section">
           ${designPacks.length ? designPacks.map((f) => `
-            <a class="list-item" href="#" data-file-url="/api/design-pack-file/${f.id}">
-              <div><div class="title">📎 ${escapeHtml(f.filename)}</div><div class="meta">Uploaded ${fmtDateShort(f.created_at)}</div></div>
-            </a>`).join('') : '<p class="muted" style="margin:0 0 10px;">No design pack uploaded yet.</p>'}
+            <div class="list-item">
+              <a class="file-link" href="#" data-file-url="/api/design-pack-file/${f.id}">
+                <div class="title">📎 ${escapeHtml(f.filename)}</div>
+                <div class="meta">Uploaded ${fmtDateShort(f.created_at)}</div>
+              </a>
+              <button type="button" class="btn danger" data-delete-pack="${f.id}">Delete</button>
+            </div>`).join('') : '<p class="muted" style="margin:0 0 10px;">No design pack uploaded yet.</p>'}
           <form class="design-pack-form">
             <label>Design pack (PDF, images, etc.)<input type="file" name="designPack" required></label>
             <div class="actions"><button class="btn secondary" type="submit">Upload Design Pack</button></div>
@@ -227,6 +231,15 @@
       ? `${designPackHtml}${photoHtml}${itemsHtml}`
       : '<p class="muted" style="margin:10px 0 0;">Nothing logged during this stage yet.</p>';
     wireFileLinks(el);
+
+    el.querySelectorAll('button[data-delete-pack]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this design pack file? This cannot be undone.')) return;
+        await api('/design-packs/' + btn.dataset.deletePack, { method: 'DELETE' });
+        await loadDesignPacks();
+        renderStageDetail(stageNumber, el);
+      });
+    });
 
     const form = el.querySelector('.design-pack-form');
     if (form) {
@@ -289,13 +302,24 @@
         <h3 class="photo-day-heading">${escapeHtml(day)}</h3>
         <div class="photo-grid">
           ${items.map((p) => `
-            <a class="photo-thumb" href="#" data-file-url="/api/photo-file/${p.id}">
-              <img data-src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}">
-              ${p.caption ? `<span class="photo-caption">${escapeHtml(p.caption)}</span>` : ''}
-            </a>`).join('')}
+            <div class="photo-thumb-wrap">
+              <a class="photo-thumb" href="#" data-file-url="/api/photo-file/${p.id}">
+                <img data-src="/api/photo-file/${p.id}" alt="${escapeHtml(p.caption || '')}">
+                ${p.caption ? `<span class="photo-caption">${escapeHtml(p.caption)}</span>` : ''}
+              </a>
+              <button type="button" class="photo-delete" data-id="${p.id}" title="Delete photo">&times;</button>
+            </div>`).join('')}
         </div>
       </div>`).join('');
     wireFileLinks(el);
+
+    el.querySelectorAll('.photo-delete').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this photo? This cannot be undone.')) return;
+        await api('/photos/' + btn.dataset.id, { method: 'DELETE' });
+        await loadPhotos();
+      });
+    });
   }
 
   document.getElementById('photo-form').addEventListener('submit', async (e) => {
@@ -355,13 +379,22 @@
     const el = document.getElementById('document-list');
     el.classList.remove('muted');
     el.innerHTML = files.length ? files.map((f) => `
-      <a class="list-item" href="#" data-file-url="/api/project-document-file/${f.id}">
-        <div>
+      <div class="list-item">
+        <a class="file-link" href="#" data-file-url="/api/project-document-file/${f.id}">
           <div class="title">📎 ${escapeHtml(f.filename)}</div>
           <div class="meta">Uploaded by ${escapeHtml(f.uploaded_by_name)} (${f.uploaded_by_role}) &middot; ${fmtDateShort(f.created_at)}</div>
-        </div>
-      </a>`).join('') : '<p class="muted">No documents uploaded yet.</p>';
+        </a>
+        <button type="button" class="btn danger" data-delete-doc="${f.id}">Delete</button>
+      </div>`).join('') : '<p class="muted">No documents uploaded yet.</p>';
     wireFileLinks(el);
+
+    el.querySelectorAll('button[data-delete-doc]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this document? This cannot be undone.')) return;
+        await api('/project-documents/' + btn.dataset.deleteDoc, { method: 'DELETE' });
+        await loadDocuments();
+      });
+    });
   }
 
   document.getElementById('document-form').addEventListener('submit', async (e) => {
@@ -418,6 +451,7 @@
         <div style="display:flex; align-items:center; gap:10px;">
           <span class="badge ${i.status}">${i.status}</span>
           <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'scheduled' ? 'complete' : 'scheduled'}">${i.status === 'scheduled' ? 'Mark Complete' : 'Reopen'}</button>
+          <button class="btn danger" data-delete-id="${i.id}">Delete</button>
         </div>
       </div>`;
   }
@@ -440,6 +474,15 @@
     el.querySelectorAll('button[data-status]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         await api('/scheduled-work/' + btn.dataset.id, { method: 'PATCH', body: { status: btn.dataset.status } });
+        await loadScheduledWork();
+        renderTimeline();
+      });
+    });
+
+    el.querySelectorAll('button[data-delete-id]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this scheduled work item? This cannot be undone.')) return;
+        await api('/scheduled-work/' + btn.dataset.deleteId, { method: 'DELETE' });
         await loadScheduledWork();
         renderTimeline();
       });

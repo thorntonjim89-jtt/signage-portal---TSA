@@ -1,5 +1,5 @@
 const { query } = require('./utils/db');
-const { getUserFromEvent, json, withErrorHandling } = require('./utils/auth');
+const { getUserFromEvent, json, getIdFromPath, withErrorHandling } = require('./utils/auth');
 
 // Uploads themselves go through upload-chunk.js + upload-finalize.js (kind:
 // 'photo') so a large photo doesn't have to fit in a single function
@@ -31,11 +31,22 @@ async function listPhotos(user, event) {
   return json(200, { photos: result.rows });
 }
 
+async function deletePhoto(user, id) {
+  if (user.role !== 'team') return json(403, { error: 'Only team can delete a photo' });
+
+  const result = await query('DELETE FROM photos WHERE id = $1 RETURNING id', [id]);
+  if (!result.rows.length) return json(404, { error: 'Photo not found' });
+  return json(200, { ok: true });
+}
+
 exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return json(401, { error: 'Not authenticated' });
 
-  if (event.httpMethod === 'GET') return listPhotos(user, event);
+  const id = getIdFromPath(event, 'photos');
+
+  if (event.httpMethod === 'GET' && !id) return listPhotos(user, event);
+  if (event.httpMethod === 'DELETE' && id) return deletePhoto(user, id);
 
   return json(405, { error: 'Method not allowed' });
 });

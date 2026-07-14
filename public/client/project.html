@@ -298,13 +298,22 @@
     const el = document.getElementById('document-list');
     el.classList.remove('muted');
     el.innerHTML = files.length ? files.map((f) => `
-      <a class="list-item" href="#" data-file-url="/api/project-document-file/${f.id}">
-        <div>
+      <div class="list-item">
+        <a class="file-link" href="#" data-file-url="/api/project-document-file/${f.id}">
           <div class="title">📎 ${escapeHtml(f.filename)}</div>
           <div class="meta">Uploaded by ${escapeHtml(f.uploaded_by_name)} (${f.uploaded_by_role}) &middot; ${fmtDateShort(f.created_at)}</div>
-        </div>
-      </a>`).join('') : '<p class="muted">No documents uploaded yet.</p>';
+        </a>
+        ${f.uploaded_by === currentUser.id ? `<button type="button" class="btn danger" data-delete-doc="${f.id}">Delete</button>` : ''}
+      </div>`).join('') : '<p class="muted">No documents uploaded yet.</p>';
     wireFileLinks(el);
+
+    el.querySelectorAll('button[data-delete-doc]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this document? This cannot be undone.')) return;
+        await api('/project-documents/' + btn.dataset.deleteDoc, { method: 'DELETE' });
+        await loadDocuments();
+      });
+    });
   }
 
   document.getElementById('document-form').addEventListener('submit', async (e) => {
