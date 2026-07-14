@@ -126,8 +126,30 @@ async function updateQuote(user, id, event) {
   }
 
   if (user.role === 'client') {
+    if (action === 'edit') {
+      // Once team has started pricing, the scope is locked in — editing
+      // after that would silently invalidate a cost estimate they already
+      // calculated against the old description/quantity.
+      if (quote.status !== 'submitted') {
+        return json(409, { error: 'A quote can only be edited before pricing has started' });
+      }
+      return applyQuoteEdit(user, id, data);
+    }
+    if (action === 'unaccept') {
+      // Status flips to 'converted' the instant a project is created, so
+      // still being 'accepted' here is itself proof nothing downstream has
+      // happened yet — safe to revert without a separate existence check.
+      if (quote.status !== 'accepted') {
+        return json(409, { error: 'Only an accepted quote can be unaccepted' });
+      }
+      const result = await query(
+        `UPDATE quotes SET status = 'priced', updated_at = now() WHERE id = $1 RETURNING *`,
+        [id]
+      );
+      return json(200, { quote: sanitizeQuote(result.rows[0], user.role) });
+    }
     if (!['accept', 'decline'].includes(action)) {
-      return json(400, { error: 'Clients may only accept or decline a priced quote' });
+      return json(400, { error: 'Clients may only edit, accept, decline, or unaccept a quote' });
     }
     if (quote.status !== 'priced') {
       return json(409, { error: `Quote must be priced before it can be ${action}ed` });
@@ -141,6 +163,13 @@ async function updateQuote(user, id, event) {
   }
 
   // role === 'team'
+  if (action === 'edit') {
+    if (quote.status === 'converted') {
+      return json(409, { error: 'A converted quote can no longer be edited' });
+    }
+    return applyQuoteEdit(user, id, data);
+  }
+
   if (action === 'price') {
     const { internalCost, markupPercent } = data;
     const cost = Number(internalCost);
@@ -164,6 +193,17 @@ async function updateQuote(user, id, event) {
   }
 
   return json(400, { error: 'Unsupported action' });
+}
+
+async function applyQuoteEdit(user, id, data) {
+  const { title, description, quantity } = data;
+  if (!title || !title.trim()) return json(400, { error: 'title is required' });
+
+  const result = await query(
+    `UPDATE quotes SET title = $1, description = $2, quantity = $3, updated_at = now() WHERE id = $4 RETURNING *`,
+    [title.trim(), description || null, quantity || 1, id]
+  );
+  return json(200, { quote: sanitizeQuote(result.rows[0], user.role) });
 }
 
 exports.handler = withErrorHandling(async (event) => {

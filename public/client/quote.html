@@ -36,12 +36,20 @@
            <button class="btn" id="accept-btn">Accept Quote</button>
            <button class="btn danger" id="decline-btn">Decline</button>
          </div>`
+      : quote.status === 'accepted'
+      ? `<div class="actions"><button class="btn secondary" id="unaccept-btn">Undo Accept</button></div>`
       : '';
     const priceLine = quote.client_price
       ? `<p><strong>Price:</strong> ${fmtMoney(quote.client_price)}</p>`
       : '<p class="muted">Pricing in progress — we will notify you once it is ready.</p>';
     const projectLink = quote.status === 'converted'
       ? '<p><a href="/client/dashboard.html">This quote is now a project — view it from your dashboard.</a></p>'
+      : '';
+    // Once team starts pricing, the request is locked in — editing after
+    // that would silently invalidate a cost estimate calculated against the
+    // old description/quantity.
+    const editButton = quote.status === 'submitted'
+      ? '<div class="actions"><button class="btn secondary" type="button" id="edit-toggle-btn">Edit Request</button></div>'
       : '';
 
     el.innerHTML = `
@@ -50,13 +58,52 @@
       <p><strong>Quantity:</strong> ${quote.quantity}</p>
       ${priceLine}
       ${projectLink}
+      ${editButton}
       ${actions}
+      <div id="edit-form-wrap" class="hidden">
+        <form id="edit-form">
+          <label>Title<input type="text" name="title" required value="${escapeHtml(quote.title)}"></label>
+          <label>Description<textarea name="description" rows="3">${escapeHtml(quote.description || '')}</textarea></label>
+          <label>Quantity<input type="number" name="quantity" min="1" value="${quote.quantity}"></label>
+          <div class="actions">
+            <button class="btn secondary" type="submit">Save Changes</button>
+            <button class="btn secondary" type="button" id="edit-cancel-btn">Cancel</button>
+          </div>
+        </form>
+      </div>
       <div class="error hidden" id="quote-error"></div>
     `;
 
     if (document.getElementById('accept-btn')) {
       document.getElementById('accept-btn').addEventListener('click', () => respond('accept'));
       document.getElementById('decline-btn').addEventListener('click', () => respond('decline'));
+    }
+    if (document.getElementById('unaccept-btn')) {
+      document.getElementById('unaccept-btn').addEventListener('click', () => respond('unaccept'));
+    }
+    if (document.getElementById('edit-toggle-btn')) {
+      document.getElementById('edit-toggle-btn').addEventListener('click', () => {
+        document.getElementById('edit-form-wrap').classList.toggle('hidden');
+      });
+      document.getElementById('edit-cancel-btn').addEventListener('click', () => {
+        document.getElementById('edit-form-wrap').classList.add('hidden');
+      });
+      document.getElementById('edit-form').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const form = new FormData(e.target);
+        const errorEl = document.getElementById('quote-error');
+        errorEl.classList.add('hidden');
+        try {
+          await api('/quotes/' + quoteId, {
+            method: 'PATCH',
+            body: { action: 'edit', title: form.get('title'), description: form.get('description'), quantity: Number(form.get('quantity')) || 1 },
+          });
+          await load();
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.classList.remove('hidden');
+        }
+      });
     }
   }
 
