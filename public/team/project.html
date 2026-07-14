@@ -140,8 +140,38 @@
     document.getElementById('project-header').innerHTML = `
       <h2>${escapeHtml(project.title)}</h2>
       <p><strong>Client price:</strong> ${fmtMoney(project.client_price)}</p>
+      <label>Fabricating supplier
+        <select id="supplier-select">
+          <option value="">In-house / none</option>
+        </select>
+      </label>
+      <div class="actions"><button class="btn secondary" id="supplier-save-btn">Save Supplier</button></div>
+      <div class="error hidden" id="supplier-error"></div>
     `;
+    await loadSupplierOptions(project.quote_id, project.supplier_id);
+    document.getElementById('supplier-save-btn').addEventListener('click', async () => {
+      const errorEl = document.getElementById('supplier-error');
+      errorEl.classList.add('hidden');
+      const supplierId = document.getElementById('supplier-select').value;
+      try {
+        await api('/projects/' + projectId, {
+          method: 'PATCH',
+          body: { action: 'reassignSupplier', supplierId: supplierId ? Number(supplierId) : null },
+        });
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove('hidden');
+      }
+    });
     renderTimeline();
+  }
+
+  async function loadSupplierOptions(quoteId, currentSupplierId) {
+    const { requests } = await api('/supplier-requests?quoteId=' + quoteId);
+    const select = document.getElementById('supplier-select');
+    select.innerHTML = '<option value="">In-house / none</option>' +
+      requests.map((r) => `<option value="${r.supplier_id}">${escapeHtml(r.supplier_name)} (${escapeHtml(r.supplier_email)})</option>`).join('');
+    select.value = currentSupplierId || '';
   }
 
   function scheduledWorkSummary() {

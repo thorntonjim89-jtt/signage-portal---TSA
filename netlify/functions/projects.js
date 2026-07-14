@@ -135,20 +135,13 @@ async function convertQuoteToProject(user, event) {
   return json(201, { project });
 }
 
-async function updateStage(user, id, event) {
+async function updateStage(user, id, data) {
   if (user.role !== 'team') {
     return json(403, { error: 'Only team members can update project stages' });
   }
 
   const project = await assertProjectAccess(user, id);
   if (!project) return json(404, { error: 'Project not found' });
-
-  let data;
-  try {
-    data = JSON.parse(event.body || '{}');
-  } catch {
-    return json(400, { error: 'Invalid JSON body' });
-  }
 
   const stageNumber = Number(data.stageNumber);
   const status = data.status;
@@ -175,6 +168,33 @@ async function updateStage(user, id, event) {
   return json(200, { stage: result.rows[0] });
 }
 
+async function reassignSupplier(user, id, data) {
+  if (user.role !== 'team') {
+    return json(403, { error: 'Only team members can reassign a project\'s supplier' });
+  }
+
+  const project = await assertProjectAccess(user, id);
+  if (!project) return json(404, { error: 'Project not found' });
+
+  const { supplierId } = data;
+  let resolvedSupplierId = null;
+  if (supplierId) {
+    // Same rule as at conversion time: only a supplier who was actually
+    // asked to price this job can be assigned to fabricate it.
+    const supplierCheck = await query(
+      'SELECT 1 FROM supplier_requests WHERE quote_id = $1 AND supplier_id = $2',
+      [project.quote_id, supplierId]
+    );
+    if (!supplierCheck.rows.length) {
+      return json(400, { error: 'supplierId must be a supplier who was asked to price this quote' });
+    }
+    resolvedSupplierId = supplierId;
+  }
+
+  const result = await query('UPDATE projects SET supplier_id = $1 WHERE id = $2 RETURNING *', [resolvedSupplierId, id]);
+  return json(200, { project: sanitizeProject(result.rows[0], user.role) });
+}
+
 exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return json(401, { error: 'Not authenticated' });
@@ -184,7 +204,16 @@ exports.handler = withErrorHandling(async (event) => {
   if (event.httpMethod === 'GET' && !id) return listProjects(user);
   if (event.httpMethod === 'GET' && id) return getProject(user, id);
   if (event.httpMethod === 'POST' && !id) return convertQuoteToProject(user, event);
-  if (event.httpMethod === 'PATCH' && id) return updateStage(user, id, event);
+  if (event.httpMethod === 'PATCH' && id) {
+    let data;
+    try {
+      data = JSON.parse(event.body || '{}');
+    } catch {
+      return json(400, { error: 'Invalid JSON body' });
+    }
+    if (data.action === 'reassignSupplier') return reassignSupplier(user, id, data);
+    return updateStage(user, id, data);
+  }
 
   return json(405, { error: 'Method not allowed' });
 });
