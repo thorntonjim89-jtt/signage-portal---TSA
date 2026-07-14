@@ -37,6 +37,15 @@
     </form>
   </div>
 
+  <div class="card">
+    <h2>Q&amp;A</h2>
+    <div class="qna-thread" id="qna-thread"></div>
+    <form id="qna-form">
+      <textarea name="message" rows="2" placeholder="Reply to the client..." required></textarea>
+      <div class="actions"><button class="btn" type="submit">Send</button></div>
+    </form>
+  </div>
+
   <div class="card hidden" id="convert-card">
     <h2>Convert to Project</h2>
     <p class="muted">The client has accepted this quote. Convert it into a 7-stage project.</p>
@@ -51,10 +60,11 @@
 <script src="/js/api.js"></script>
 <script>
   const quoteId = qs('id');
+  let currentUser;
   (async () => {
-    const user = await requireRole(['team']);
-    if (!user) return;
-    renderTopbar(user, 'Signage Portal — Team');
+    currentUser = await requireRole(['team']);
+    if (!currentUser) return;
+    renderTopbar(currentUser, 'Signage Portal — Team');
     await load();
   })();
 
@@ -110,7 +120,27 @@
     document.getElementById('convert-card').classList.toggle('hidden', quote.status !== 'accepted');
     await loadSupplierRequests();
     await loadFiles();
+    await loadQna();
   }
+
+  async function loadQna() {
+    const { messages } = await api('/qna?quoteId=' + quoteId);
+    const el = document.getElementById('qna-thread');
+    el.innerHTML = messages.map((m) => `
+      <div class="qna-msg ${m.sender_id === currentUser.id ? 'mine' : ''}">
+        <div class="meta">${escapeHtml(m.sender_name)} (${m.sender_role}) &middot; ${fmtDate(m.created_at)}</div>
+        <div>${escapeHtml(m.message)}</div>
+      </div>`).join('') || '<p class="muted">No messages yet.</p>';
+    el.scrollTop = el.scrollHeight;
+  }
+
+  document.getElementById('qna-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    await api('/qna', { method: 'POST', body: { quoteId, message: form.get('message') } });
+    e.target.reset();
+    await loadQna();
+  });
 
   async function loadFiles() {
     const { files } = await api('/quote-files?quoteId=' + quoteId);
