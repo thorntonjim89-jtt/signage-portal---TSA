@@ -6,6 +6,10 @@
   <h2 class="section-heading">Pending Accounts</h2>
   <div id="pending-list" class="item-list muted">Loading…</div>
 
+  <h2 class="section-heading">All Accounts</h2>
+  <input type="text" id="accounts-search" placeholder="Search by name, email, or company…" style="margin-bottom:14px;">
+  <div id="accounts-list" class="item-list muted">Loading…</div>
+
   <h2 class="section-heading">All Quotes</h2>
   <div id="quotes-list" class="item-list muted">Loading…</div>
 
@@ -19,6 +23,7 @@
     if (!user) return;
     renderTopbar(user, 'Signage Portal — Team');
     await loadPending();
+    await loadAllAccounts();
     await loadQuotes();
     await loadProjects();
   })();
@@ -43,9 +48,53 @@
       btn.addEventListener('click', async () => {
         await api('/users/' + btn.dataset.id, { method: 'PATCH', body: { status: btn.dataset.status } });
         await loadPending();
+        await loadAllAccounts();
       });
     });
   }
+
+  let allAccounts = [];
+
+  async function loadAllAccounts() {
+    const { users } = await api('/users');
+    allAccounts = users;
+    renderAllAccounts();
+  }
+
+  function renderAllAccounts() {
+    const el = document.getElementById('accounts-list');
+    el.classList.remove('muted');
+    const q = document.getElementById('accounts-search').value.trim().toLowerCase();
+    const filtered = q
+      ? allAccounts.filter((u) =>
+          u.name.toLowerCase().includes(q) ||
+          u.email.toLowerCase().includes(q) ||
+          (u.company_name || '').toLowerCase().includes(q))
+      : allAccounts;
+
+    el.innerHTML = filtered.length ? filtered.map((u) => `
+      <div class="item-card">
+        <div>
+          <div class="title">${escapeHtml(u.name)} <span class="badge">${u.role}</span> <span class="badge ${u.status}">${u.status}</span></div>
+          <div class="meta">${escapeHtml(u.email)}${u.company_name ? ' &middot; ' + escapeHtml(u.company_name) : ''} &middot; Joined ${fmtDate(u.created_at)}</div>
+        </div>
+        <div class="actions" style="margin-top:0;">
+          ${u.status === 'pending' ? `<button class="btn" data-id="${u.id}" data-status="approved">Approve</button><button class="btn secondary" data-id="${u.id}" data-status="rejected">Reject</button>` : ''}
+          ${u.status === 'approved' ? `<button class="btn danger" data-id="${u.id}" data-status="rejected">Deactivate</button>` : ''}
+          ${u.status === 'rejected' ? `<button class="btn secondary" data-id="${u.id}" data-status="approved">Reactivate</button>` : ''}
+        </div>
+      </div>`).join('') : '<p class="muted">No accounts match.</p>';
+
+    el.querySelectorAll('button[data-status]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        await api('/users/' + btn.dataset.id, { method: 'PATCH', body: { status: btn.dataset.status } });
+        await loadPending();
+        await loadAllAccounts();
+      });
+    });
+  }
+
+  document.getElementById('accounts-search').addEventListener('input', renderAllAccounts);
 
   async function loadQuotes() {
     const { quotes } = await api('/quotes');
