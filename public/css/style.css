@@ -291,7 +291,8 @@ main > .section-heading:first-child { margin-top: 0; }
 .timeline-info { flex: 1 1 200px; min-width: 0; }
 .timeline .meta { margin-top: 3px; font-size: 13px; color: var(--text); opacity: 0.75; }
 .timeline .stage-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.scheduled-breakdown { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.breakdown-hint { font-size: 12px; margin: 6px 0 0; }
+.scheduled-breakdown { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
 .breakdown-chip {
   display: inline-block;
   padding: 2px 9px;
