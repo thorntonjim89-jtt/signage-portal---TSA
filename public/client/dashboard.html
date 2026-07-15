@@ -17,9 +17,11 @@
   </div>
 
   <h2 class="section-heading">My Quotes</h2>
+  <input type="text" id="quotes-search" placeholder="Search by title or status…" style="margin-bottom:14px;">
   <div id="quotes-list" class="item-list muted">Loading…</div>
 
   <h2 class="section-heading">My Projects</h2>
+  <input type="text" id="projects-search" placeholder="Search by title or status…" style="margin-bottom:14px;">
   <div id="projects-list" class="item-list muted">Loading…</div>
 </main>
 <script src="/js/api.js"></script>
@@ -32,35 +34,61 @@
     await loadProjects();
   })();
 
+  let allQuotes = [];
+
   async function loadQuotes() {
     const { quotes } = await api('/quotes');
+    allQuotes = quotes;
+    renderQuotes();
+  }
+
+  function renderQuotes() {
     const el = document.getElementById('quotes-list');
     el.classList.remove('muted');
-    if (!quotes.length) { el.innerHTML = '<p class="muted">No quote requests yet.</p>'; return; }
-    el.innerHTML = quotes.map((q) => `
-      <a class="item-card" href="/client/quote.html?id=${q.id}">
+    if (!allQuotes.length) { el.innerHTML = '<p class="muted">No quote requests yet.</p>'; return; }
+    const q = document.getElementById('quotes-search').value.trim().toLowerCase();
+    const filtered = q
+      ? allQuotes.filter((quote) => quote.title.toLowerCase().includes(q) || quote.status.toLowerCase().includes(q))
+      : allQuotes;
+    el.innerHTML = filtered.length ? filtered.map((quote) => `
+      <a class="item-card" href="/client/quote.html?id=${quote.id}">
         <div>
-          <div class="title">${escapeHtml(q.title)}</div>
-          <div class="meta">Requested ${fmtDate(q.created_at)}${q.client_price ? ' &middot; ' + fmtMoney(q.client_price) : ''}</div>
+          <div class="title">${escapeHtml(quote.title)}</div>
+          <div class="meta">Requested ${fmtDate(quote.created_at)}${quote.client_price ? ' &middot; ' + fmtMoney(quote.client_price) : ''}</div>
         </div>
-        <span class="badge ${q.status}">${q.status}</span>
-      </a>`).join('');
+        <span class="badge ${quote.status}">${quote.status}</span>
+      </a>`).join('') : '<p class="muted">No quotes match.</p>';
   }
+
+  document.getElementById('quotes-search').addEventListener('input', renderQuotes);
+
+  let allProjects = [];
 
   async function loadProjects() {
     const { projects } = await api('/projects');
+    allProjects = projects;
+    renderProjects();
+  }
+
+  function renderProjects() {
     const el = document.getElementById('projects-list');
     el.classList.remove('muted');
-    if (!projects.length) { el.innerHTML = '<p class="muted">No active projects yet.</p>'; return; }
-    el.innerHTML = projects.map((p) => `
+    if (!allProjects.length) { el.innerHTML = '<p class="muted">No active projects yet.</p>'; return; }
+    const q = document.getElementById('projects-search').value.trim().toLowerCase();
+    const filtered = q
+      ? allProjects.filter((p) => p.title.toLowerCase().includes(q) || p.status.toLowerCase().includes(q))
+      : allProjects;
+    el.innerHTML = filtered.length ? filtered.map((p) => `
       <a class="item-card" href="/client/project.html?id=${p.id}">
         <div>
           <div class="title">${escapeHtml(p.title)}</div>
           <div class="meta">Stage ${p.current_stage} of 7</div>
         </div>
         <span class="badge ${p.status}">${p.status === 'complete' ? 'Complete' : 'In progress'}</span>
-      </a>`).join('');
+      </a>`).join('') : '<p class="muted">No projects match.</p>';
   }
+
+  document.getElementById('projects-search').addEventListener('input', renderProjects);
 
   document.getElementById('quote-form').addEventListener('submit', async (e) => {
     e.preventDefault();
