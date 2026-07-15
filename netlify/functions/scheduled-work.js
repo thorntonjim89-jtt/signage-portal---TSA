@@ -21,7 +21,7 @@ async function listScheduledWork(user, event) {
   if (!project) return json(403, { error: 'Forbidden' });
 
   const result = await query(
-    'SELECT id, project_id, description, scheduled_date, status, created_at FROM scheduled_work WHERE project_id = $1 ORDER BY scheduled_date ASC',
+    'SELECT id, project_id, description, scheduled_date, status, completed_at, created_at FROM scheduled_work WHERE project_id = $1 ORDER BY scheduled_date ASC',
     [projectId]
   );
   return json(200, { items: result.rows });
@@ -51,20 +51,36 @@ async function createScheduledWork(user, event) {
   const result = await query(
     `INSERT INTO scheduled_work (project_id, description, scheduled_date, created_by)
      VALUES ($1, $2, $3, $4)
-     RETURNING id, project_id, description, scheduled_date, status, created_at`,
+     RETURNING id, project_id, description, scheduled_date, status, completed_at, created_at`,
     [projectId, description.trim(), scheduledDate, user.id]
   );
   return json(201, { item: result.rows[0] });
 }
 
-async function updateScheduledWork(user, id, event) {
+async function updateScheduledWork(user, id, data) {
   if (user.role !== 'team') return json(403, { error: 'Only team can update scheduled work' });
 
-  let data;
-  try {
-    data = JSON.parse(event.body || '{}');
-  } catch {
-    return json(400, { error: 'Invalid JSON body' });
+  // A plain status toggle stamps completed_at as "now" for the common case;
+  // setDates lets team correct the scheduled date or record the actual
+  // completion date directly, the same way stage dates work on the timeline.
+  if (data.action === 'setDates') {
+    const { scheduledDate, completedAt } = data;
+    if (!scheduledDate || Number.isNaN(new Date(scheduledDate).getTime())) {
+      return json(400, { error: 'scheduledDate must be a valid date' });
+    }
+    let completed = null;
+    if (completedAt) {
+      completed = new Date(completedAt);
+      if (Number.isNaN(completed.getTime())) return json(400, { error: 'completedAt must be a valid date' });
+    }
+    const status = completed ? 'complete' : 'scheduled';
+    const result = await query(
+      `UPDATE scheduled_work SET scheduled_date = $1, completed_at = $2, status = $3 WHERE id = $4
+       RETURNING id, project_id, description, scheduled_date, status, completed_at, created_at`,
+      [scheduledDate, completed, status, id]
+    );
+    if (!result.rows.length) return json(404, { error: 'Scheduled work item not found' });
+    return json(200, { item: result.rows[0] });
   }
 
   const { status } = data;
@@ -72,9 +88,10 @@ async function updateScheduledWork(user, id, event) {
     return json(400, { error: 'status must be one of: scheduled, complete' });
   }
 
+  const setClause = status === 'complete' ? 'status = $1, completed_at = now()' : 'status = $1, completed_at = NULL';
   const result = await query(
-    `UPDATE scheduled_work SET status = $1 WHERE id = $2
-     RETURNING id, project_id, description, scheduled_date, status, created_at`,
+    `UPDATE scheduled_work SET ${setClause} WHERE id = $2
+     RETURNING id, project_id, description, scheduled_date, status, completed_at, created_at`,
     [status, id]
   );
   if (!result.rows.length) return json(404, { error: 'Scheduled work item not found' });
@@ -97,7 +114,15 @@ exports.handler = withErrorHandling(async (event) => {
 
   if (event.httpMethod === 'GET' && !id) return listScheduledWork(user, event);
   if (event.httpMethod === 'POST' && !id) return createScheduledWork(user, event);
-  if (event.httpMethod === 'PATCH' && id) return updateScheduledWork(user, id, event);
+  if (event.httpMethod === 'PATCH' && id) {
+    let data;
+    try {
+      data = JSON.parse(event.body || '{}');
+    } catch {
+      return json(400, { error: 'Invalid JSON body' });
+    }
+    return updateScheduledWork(user, id, data);
+  }
   if (event.httpMethod === 'DELETE' && id) return deleteScheduledWork(user, id);
 
   return json(405, { error: 'Method not allowed' });

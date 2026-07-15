@@ -176,6 +176,7 @@ CREATE TABLE IF NOT EXISTS scheduled_work (
   description TEXT NOT NULL,
   scheduled_date DATE NOT NULL,
   status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'complete')),
+  completed_at TIMESTAMPTZ,
   created_by INTEGER NOT NULL REFERENCES users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
