@@ -177,6 +177,57 @@ async function updateStage(user, id, data) {
   return json(200, { stage: result.rows[0] });
 }
 
+// Start/Complete only ever stamp "right now", which is fine for working the
+// timeline live but useless for entering a project that's already partway
+// through, or correcting a date that was set wrong. This lets team set the
+// actual started/completed dates directly; status is derived from them
+// rather than driving them.
+async function setStageDates(user, id, data) {
+  if (user.role !== 'team') {
+    return json(403, { error: "Only team members can edit a stage's dates" });
+  }
+
+  const project = await assertProjectAccess(user, id);
+  if (!project) return json(404, { error: 'Project not found' });
+
+  const stageNumber = Number(data.stageNumber);
+  if (!Number.isInteger(stageNumber) || stageNumber < 1 || stageNumber > 7) {
+    return json(400, { error: 'stageNumber must be an integer between 1 and 7' });
+  }
+
+  let startedAt = null;
+  let completedAt = null;
+  if (data.startedAt) {
+    startedAt = new Date(data.startedAt);
+    if (Number.isNaN(startedAt.getTime())) return json(400, { error: 'startedAt must be a valid date' });
+  }
+  if (data.completedAt) {
+    completedAt = new Date(data.completedAt);
+    if (Number.isNaN(completedAt.getTime())) return json(400, { error: 'completedAt must be a valid date' });
+  }
+  // A completed stage was necessarily started, even if that date wasn't
+  // entered explicitly.
+  if (completedAt && !startedAt) startedAt = completedAt;
+  if (startedAt && completedAt && completedAt < startedAt) {
+    return json(400, { error: 'completedAt cannot be before startedAt' });
+  }
+
+  const status = completedAt ? 'complete' : startedAt ? 'in_progress' : 'pending';
+
+  const result = await query(
+    `UPDATE project_stages SET status = $1, started_at = $2, completed_at = $3
+     WHERE project_id = $4 AND stage_number = $5 RETURNING *`,
+    [status, startedAt, completedAt, id, stageNumber]
+  );
+  if (!result.rows.length) return json(404, { error: 'Stage not found' });
+
+  if (status !== 'pending') {
+    await query('UPDATE projects SET current_stage = GREATEST(current_stage, $1) WHERE id = $2', [stageNumber, id]);
+  }
+
+  return json(200, { stage: result.rows[0] });
+}
+
 async function reassignSupplier(user, id, data) {
   if (user.role !== 'team') {
     return json(403, { error: 'Only team members can reassign a project\'s supplier' });
@@ -221,6 +272,7 @@ exports.handler = withErrorHandling(async (event) => {
       return json(400, { error: 'Invalid JSON body' });
     }
     if (data.action === 'reassignSupplier') return reassignSupplier(user, id, data);
+    if (data.action === 'setStageDates') return setStageDates(user, id, data);
     return updateStage(user, id, data);
   }
 

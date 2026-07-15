@@ -291,21 +291,24 @@ main > .section-heading:first-child { margin-top: 0; }
 .timeline-info { flex: 1 1 200px; min-width: 0; }
 .timeline .meta { margin-top: 3px; font-size: 13px; color: var(--text); opacity: 0.75; }
 .timeline .stage-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.stage-detail-toggle {
+.stage-links { display: flex; gap: 14px; margin-top: 6px; }
+.stage-detail-toggle, .stage-dates-toggle {
   display: block;
   background: none;
   border: none;
   padding: 0;
-  margin-top: 6px;
   font-size: 12px;
   font-weight: 600;
   color: var(--accent);
   cursor: pointer;
 }
-.stage-detail-toggle:hover { color: var(--accent-dark); }
+.stage-detail-toggle:hover, .stage-dates-toggle:hover { color: var(--accent-dark); }
 .stage-detail { margin-top: 10px; }
 .stage-detail .photo-grid { margin-bottom: 10px; }
 .stage-detail .list-item { padding: 9px 0; }
+.stage-dates-form { margin-top: 10px; padding: 10px; background: var(--bg); border-radius: 10px; max-width: 320px; }
+.stage-dates-form form { display: flex; flex-direction: column; gap: 8px; }
+.stage-dates-form label { font-size: 12px; }
 .design-pack-section { margin-bottom: 10px; }
 .design-pack-section form { margin-top: 10px; }
 .timeline .dot {
