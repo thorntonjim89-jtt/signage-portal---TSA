@@ -133,21 +133,37 @@ CREATE TABLE IF NOT EXISTS qna_messages (
   )
 );
 
--- Two separate, siloed channels for reporting problems on a project: a
--- client might report an install issue, a supplier might report a
--- manufacturing defect. Neither can see the other's reports; team sees both
--- (see project-issues.js).
+-- A single shared punch list per project: a client and a supplier are often
+-- reporting the same physical defect, and siloing them into two disconnected
+-- rows meant resolving one side left the other stuck open forever. Team,
+-- the project's client, and the project's assigned supplier all see every
+-- issue on the project (see project-issues.js). `source` still records who
+-- originally reported it, purely as context.
 CREATE TABLE IF NOT EXISTS project_issues (
   id SERIAL PRIMARY KEY,
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  source TEXT NOT NULL CHECK (source IN ('client', 'supplier')),
+  source TEXT NOT NULL CHECK (source IN ('client', 'supplier', 'team')),
   reported_by INTEGER NOT NULL REFERENCES users(id),
   description TEXT NOT NULL,
-  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')),
+  status TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'resolved', 'wont_fix')),
   file_data BYTEA,
   content_type TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   resolved_at TIMESTAMPTZ
+);
+
+-- An audit trail of responses to an issue — a status change plus an
+-- optional note and proof-of-fix photo — instead of a single overwritable
+-- status field with no record of what was actually done.
+CREATE TABLE IF NOT EXISTS project_issue_responses (
+  id SERIAL PRIMARY KEY,
+  issue_id INTEGER NOT NULL REFERENCES project_issues(id) ON DELETE CASCADE,
+  responder_id INTEGER NOT NULL REFERENCES users(id),
+  status TEXT NOT NULL CHECK (status IN ('open', 'in_progress', 'resolved', 'wont_fix')),
+  description TEXT,
+  file_data BYTEA,
+  content_type TEXT,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 -- Upcoming milestones for a project (e.g. "ceiling signage L23-L28 install"

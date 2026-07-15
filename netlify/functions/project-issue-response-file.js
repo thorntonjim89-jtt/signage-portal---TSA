@@ -13,12 +13,16 @@ exports.handler = withErrorHandling(async (event) => {
   const user = getUserFromEvent(event);
   if (!user) return { statusCode: 401, body: 'Not authenticated' };
 
-  const id = getIdFromPath(event, 'project-issue-file');
-  if (!id) return { statusCode: 400, body: 'Missing issue id' };
+  const id = getIdFromPath(event, 'project-issue-response-file');
+  if (!id) return { statusCode: 400, body: 'Missing response id' };
 
-  const issueResult = await query('SELECT * FROM project_issues WHERE id = $1', [id]);
+  const responseResult = await query('SELECT * FROM project_issue_responses WHERE id = $1', [id]);
+  const response = responseResult.rows[0];
+  if (!response || !response.file_data) return { statusCode: 404, body: 'Not found' };
+
+  const issueResult = await query('SELECT project_id FROM project_issues WHERE id = $1', [response.issue_id]);
   const issue = issueResult.rows[0];
-  if (!issue || !issue.file_data) return { statusCode: 404, body: 'Not found' };
+  if (!issue) return { statusCode: 404, body: 'Not found' };
 
   const projectResult = await query('SELECT * FROM projects WHERE id = $1', [issue.project_id]);
   const project = projectResult.rows[0];
@@ -27,5 +31,5 @@ exports.handler = withErrorHandling(async (event) => {
   if (!(await assertProjectVisibility(user, project))) return { statusCode: 403, body: 'Forbidden' };
 
   const part = event.queryStringParameters && event.queryStringParameters.part;
-  return serveFile(issue, part);
+  return serveFile(response, part);
 });

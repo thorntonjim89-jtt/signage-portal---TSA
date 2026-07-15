@@ -25,13 +25,16 @@ async function assertQuoteAccess(user, quoteId) {
   return quote;
 }
 
-async function assertChannelAccess(user, projectId, source) {
+// Client and supplier issues share a single punch list now — team, the
+// project's client, and the project's assigned supplier can all see and
+// report into it (see project-issues.js).
+async function assertProjectVisibility(user, projectId) {
   const result = await query('SELECT * FROM projects WHERE id = $1', [projectId]);
   const project = result.rows[0];
   if (!project) return null;
   if (user.role === 'team') return project;
-  if (user.role === 'client') return source === 'client' && project.client_id === user.id ? project : null;
-  if (user.role === 'supplier') return source === 'supplier' && project.supplier_id === user.id ? project : null;
+  if (user.role === 'client') return project.client_id === user.id ? project : null;
+  if (user.role === 'supplier') return project.supplier_id === user.id ? project : null;
   return null;
 }
 
@@ -71,7 +74,7 @@ exports.handler = withErrorHandling(async (event) => {
   }
 
   const { uploadId, kind } = data;
-  if (!uploadId || !['photo', 'quote-file', 'issue-photo', 'design-pack', 'project-document'].includes(kind)) {
+  if (!uploadId || !['photo', 'quote-file', 'issue-photo', 'issue-response-photo', 'design-pack', 'project-document'].includes(kind)) {
     return json(400, { error: 'uploadId and a valid kind are required' });
   }
 
@@ -160,24 +163,53 @@ exports.handler = withErrorHandling(async (event) => {
     return json(201, { file: result.rows[0] });
   }
 
-  // kind === 'issue-photo'
-  if (user.role !== 'client' && user.role !== 'supplier') {
-    return json(403, { error: 'Only a client or supplier can report an issue' });
-  }
-  const { projectId, description, contentType } = data;
-  if (!projectId || !description || !description.trim() || !contentType) {
-    return json(400, { error: 'projectId, description and contentType are required' });
-  }
-  const source = user.role;
-  const project = await assertChannelAccess(user, projectId, source);
-  if (!project) return json(403, { error: 'Forbidden' });
+  if (kind === 'issue-photo') {
+    const { projectId, description, contentType } = data;
+    if (!projectId || !description || !description.trim() || !contentType) {
+      return json(400, { error: 'projectId, description and contentType are required' });
+    }
+    const source = user.role;
+    const project = await assertProjectVisibility(user, projectId);
+    if (!project) return json(403, { error: 'Forbidden' });
 
-  const result = await query(
-    `INSERT INTO project_issues (project_id, source, reported_by, description, file_data, content_type)
+    const result = await query(
+      `INSERT INTO project_issues (project_id, source, reported_by, description, file_data, content_type)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       RETURNING id, project_id, source, reported_by, description, status, (file_data IS NOT NULL) AS has_photo, created_at, resolved_at`,
+      [projectId, source, user.id, description.trim(), buffer, contentType]
+    );
+    await cleanupChunks(uploadId);
+    return json(201, { issue: { ...result.rows[0], reported_by_name: user.name, responses: [] } });
+  }
+
+  // kind === 'issue-response-photo'
+  if (user.role !== 'team') {
+    return json(403, { error: 'Only team members can respond to an issue' });
+  }
+  const { issueId, status, description: responseDescription, contentType } = data;
+  const STATUSES = ['open', 'in_progress', 'resolved', 'wont_fix'];
+  if (!issueId || !STATUSES.includes(status) || !contentType) {
+    return json(400, { error: 'issueId, a valid status, and contentType are required' });
+  }
+  const issueResult = await query('SELECT * FROM project_issues WHERE id = $1', [issueId]);
+  if (!issueResult.rows.length) return json(404, { error: 'Issue not found' });
+
+  const responseResult = await query(
+    `INSERT INTO project_issue_responses (issue_id, responder_id, status, description, file_data, content_type)
      VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id, issue_id, responder_id, status, description, (file_data IS NOT NULL) AS has_photo, created_at`,
+    [issueId, user.id, status, (responseDescription && responseDescription.trim()) || null, buffer, contentType]
+  );
+  const issueUpdate = await query(
+    `UPDATE project_issues
+     SET status = $1, resolved_at = CASE WHEN $1 = 'resolved' THEN now() ELSE NULL END
+     WHERE id = $2
      RETURNING id, project_id, source, reported_by, description, status, (file_data IS NOT NULL) AS has_photo, created_at, resolved_at`,
-    [projectId, source, user.id, description.trim(), buffer, contentType]
+    [status, issueId]
   );
   await cleanupChunks(uploadId);
-  return json(201, { issue: { ...result.rows[0], reported_by_name: user.name } });
+  return json(201, {
+    issue: issueUpdate.rows[0],
+    response: { ...responseResult.rows[0], responder_name: user.name, responder_role: user.role },
+  });
 });
