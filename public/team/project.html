@@ -40,6 +40,16 @@
         <div class="actions"><button class="btn secondary" type="submit">Add Scheduled Work</button></div>
         <div class="error hidden" id="scheduled-work-error"></div>
       </form>
+      <div class="breakdown-group" style="margin-top:16px;">
+        <div class="breakdown-group-header">Backfill quantities from tracker</div>
+        <p class="muted" style="margin-top:0;">
+          Matches item descriptions against the client's Manufacturing &amp; Installation Tracker and corrects
+          quantities to the confirmed counts. Anything it can't confidently match (variations, extras your team
+          added, ambiguous duplicates) is left untouched.
+        </p>
+        <button class="btn secondary" type="button" id="backfill-preview-btn">Preview changes</button>
+        <div id="backfill-result" style="margin-top:12px;"></div>
+      </div>
       <div class="tab-bar" id="scheduled-work-subtabs" style="margin-top:16px;">
         <button class="tab-btn active" data-subtab="upcoming">Upcoming</button>
         <button class="tab-btn" data-subtab="completed">Completed</button>
@@ -702,6 +712,53 @@
     } catch (err) {
       errorEl.textContent = err.message;
       errorEl.classList.remove('hidden');
+    }
+  });
+
+  function renderBackfillResult(plan) {
+    const el = document.getElementById('backfill-result');
+    if (!plan.changes.length) {
+      el.innerHTML = `<p class="muted">No confident matches to correct — ${plan.matchedRows}/${plan.totalRows} items matched the tracker and already have the right quantity, ${plan.untouchedRows} left untouched.</p>`;
+      return;
+    }
+    const rows = plan.changes
+      .map((c) => `<li>${escapeHtml(c.description)} — <strong>${c.oldQuantity} &rarr; ${c.newQuantity}</strong></li>`)
+      .join('');
+    const applyBtn = plan.applied
+      ? '<p class="muted">Applied.</p>'
+      : '<button class="btn secondary" type="button" id="backfill-apply-btn">Apply these changes</button>';
+    el.innerHTML = `
+      <p>${plan.changes.length} item(s) would change (${plan.untouchedRows} left untouched as extras/unmatched):</p>
+      <ul>${rows}</ul>
+      ${applyBtn}
+    `;
+    if (!plan.applied) {
+      document.getElementById('backfill-apply-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('backfill-apply-btn');
+        btn.disabled = true;
+        try {
+          const applied = await api('/backfill-quantities', { method: 'POST', body: { projectId, apply: true } });
+          renderBackfillResult(applied);
+          await loadScheduledWork();
+          renderTimeline();
+        } catch (err) {
+          btn.disabled = false;
+          alert(err.message);
+        }
+      });
+    }
+  }
+
+  document.getElementById('backfill-preview-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('backfill-preview-btn');
+    btn.disabled = true;
+    try {
+      const plan = await api('/backfill-quantities', { method: 'POST', body: { projectId, apply: false } });
+      renderBackfillResult(plan);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
     }
   });
 
