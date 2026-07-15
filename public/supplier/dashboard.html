@@ -4,9 +4,11 @@
 <header class="topbar" id="topbar"></header>
 <main>
   <h2 class="section-heading">My Projects</h2>
+  <input type="text" id="projects-search" placeholder="Search by title or status…" style="margin-bottom:14px;">
   <div id="projects-list" class="item-list muted">Loading…</div>
 
   <h2 class="section-heading">Pricing Requests</h2>
+  <input type="text" id="requests-search" placeholder="Search by status…" style="margin-bottom:14px;">
   <div id="requests-list" class="item-list muted">Loading…</div>
 </main>
 <script src="/js/api.js"></script>
@@ -19,31 +21,55 @@
     await loadRequests();
   })();
 
+  let allProjects = [];
+
   async function loadProjects() {
     const { projects } = await api('/projects');
+    allProjects = projects;
+    renderProjects();
+  }
+
+  function renderProjects() {
     const el = document.getElementById('projects-list');
     el.classList.remove('muted');
-    el.innerHTML = projects.length ? projects.map((p) => `
+    const q = document.getElementById('projects-search').value.trim().toLowerCase();
+    const filtered = q
+      ? allProjects.filter((p) => p.title.toLowerCase().includes(q) || p.status.toLowerCase().includes(q))
+      : allProjects;
+    el.innerHTML = filtered.length ? filtered.map((p) => `
       <a class="item-card" href="/supplier/project.html?id=${p.id}">
         <div>
           <div class="title">${escapeHtml(p.title)}</div>
           <div class="meta">Stage ${p.current_stage} of 7</div>
         </div>
         <span class="badge ${p.status}">${p.status === 'complete' ? 'Complete' : 'In progress'}</span>
-      </a>`).join('') : '<p class="muted">No projects assigned yet.</p>';
+      </a>`).join('') : `<p class="muted">${allProjects.length ? 'No projects match.' : 'No projects assigned yet.'}</p>`;
   }
+
+  document.getElementById('projects-search').addEventListener('input', renderProjects);
+
+  let allRequests = [];
 
   async function loadRequests() {
     const { requests } = await api('/supplier-requests');
+    allRequests = requests;
+    renderRequests();
+  }
+
+  function renderRequests() {
     const el = document.getElementById('requests-list');
     el.classList.remove('muted');
-    el.innerHTML = requests.length ? requests.map((r) => `
+    const q = document.getElementById('requests-search').value.trim().toLowerCase();
+    const filtered = q ? allRequests.filter((r) => r.status.toLowerCase().includes(q)) : allRequests;
+    el.innerHTML = filtered.length ? filtered.map((r) => `
       <a class="item-card" href="/supplier/request.html?id=${r.id}">
         <div>
           <div class="title">Quote #${r.quote_id}</div>
           <div class="meta">Requested ${fmtDate(r.requested_at)}${r.cost_price ? ' &middot; your price ' + fmtMoney(r.cost_price) : ''}</div>
         </div>
         <span class="badge ${r.status}">${r.status}</span>
-      </a>`).join('') : '<p class="muted">No pricing requests yet.</p>';
+      </a>`).join('') : `<p class="muted">${allRequests.length ? 'No requests match.' : 'No pricing requests yet.'}</p>`;
   }
+
+  document.getElementById('requests-search').addEventListener('input', renderRequests);
 </script>
