@@ -199,7 +199,7 @@
       <div class="list-item">
         <div>
           <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}</div>
-          <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}</div>
+          <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
         </div>
         <span class="badge ${i.status}">${i.status}</span>
       </div>`;
@@ -256,7 +256,7 @@
       <div class="list-item">
         <div>
           <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}</div>
-          <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}</div>
+          <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
         </div>
         <span class="badge ${i.status}">${i.status}</span>
       </div>`;
