@@ -291,6 +291,18 @@ main > .section-heading:first-child { margin-top: 0; }
 .timeline-info { flex: 1 1 200px; min-width: 0; }
 .timeline .meta { margin-top: 3px; font-size: 13px; color: var(--text); opacity: 0.75; }
 .timeline .stage-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.scheduled-breakdown { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.breakdown-chip {
+  display: inline-block;
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--accent-tint);
+  color: var(--accent-dark);
+  white-space: nowrap;
+}
+.breakdown-chip.complete { background: #e1ead9; color: var(--success); }
 .stage-links { display: flex; gap: 14px; margin-top: 6px; }
 .stage-detail-toggle, .stage-dates-toggle {
   display: block;

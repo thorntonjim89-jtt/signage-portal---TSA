@@ -175,10 +175,21 @@
     select.value = currentSupplierId || '';
   }
 
-  function scheduledWorkSummary() {
+  // A single "12 of 28 scheduled items complete" total doesn't say what's
+  // actually left — break it down by sign type (the "CODE — ..." prefix)
+  // so each category's progress is visible at a glance.
+  function scheduledWorkBreakdown() {
     if (!scheduledWorkItems.length) return null;
-    const complete = scheduledWorkItems.filter((i) => i.status === 'complete').length;
-    return `${complete} of ${scheduledWorkItems.length} scheduled items complete`;
+    const groups = new Map();
+    scheduledWorkItems.forEach((i) => {
+      const { tag } = splitSignType(i.description);
+      const key = tag || 'Other';
+      if (!groups.has(key)) groups.set(key, { total: 0, complete: 0 });
+      const g = groups.get(key);
+      g.total += 1;
+      if (i.status === 'complete') g.complete += 1;
+    });
+    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }
 
   // <input type="date"> needs a plain YYYY-MM-DD value, not a locale string.
@@ -188,13 +199,15 @@
   }
 
   function renderTimeline() {
-    document.getElementById('timeline').innerHTML = stages.map((s) => `
+    document.getElementById('timeline').innerHTML = stages.map((s) => {
+      const breakdown = s.name === 'Installed & Complete' ? scheduledWorkBreakdown() : null;
+      return `
       <li class="${s.status}">
         <span class="dot">${s.status === 'complete' ? '✓' : s.stage_number}</span>
         <div class="timeline-info">
           <strong>${escapeHtml(s.name)}</strong>
           <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
-          ${s.name === 'Installed & Complete' && scheduledWorkSummary() ? `<div class="meta">${scheduledWorkSummary()}</div>` : ''}
+          ${breakdown ? `<div class="scheduled-breakdown">${breakdown.map(([tag, g]) => `<span class="breakdown-chip ${g.complete === g.total ? 'complete' : ''}">${escapeHtml(tag)} ${g.complete}/${g.total}</span>`).join('')}</div>` : ''}
           <div class="stage-links">
             ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button>` : ''}
             <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">Edit Dates</button>
@@ -215,7 +228,8 @@
           ${s.status !== 'in_progress' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="in_progress">Start</button>` : ''}
           ${s.status !== 'complete' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="complete">Complete</button>` : ''}
         </div>
-      </li>`).join('');
+      </li>`;
+    }).join('');
 
     document.querySelectorAll('#timeline button[data-status]').forEach((btn) => {
       btn.addEventListener('click', async () => {
