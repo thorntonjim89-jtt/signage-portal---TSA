@@ -478,7 +478,7 @@
           <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}</div>
           <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}</div>
         </div>
-        <div style="display:flex; align-items:center; gap:10px;">
+        <div class="list-item-actions">
           <span class="badge ${i.status}">${i.status}</span>
           <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'scheduled' ? 'complete' : 'scheduled'}">${i.status === 'scheduled' ? 'Mark Complete' : 'Reopen'}</button>
           <button class="btn danger" data-delete-id="${i.id}">Delete</button>
@@ -563,7 +563,7 @@
           <div class="title">${escapeHtml(i.description)}</div>
           <div class="meta">${escapeHtml(i.reported_by_name)} &middot; ${fmtDate(i.created_at)}${i.has_photo ? ' &middot; <a href="#" data-file-url="/api/project-issue-file/' + i.id + '">photo</a>' : ''}</div>
         </div>
-        <div style="display:flex; align-items:center; gap:10px;">
+        <div class="list-item-actions">
           <span class="badge ${i.status}">${i.status}</span>
           <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'open' ? 'resolved' : 'open'}">${i.status === 'open' ? 'Mark Resolved' : 'Reopen'}</button>
         </div>
