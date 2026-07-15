@@ -295,16 +295,20 @@ main > .section-heading:first-child { margin-top: 0; }
 .breakdown-chip {
   display: inline-block;
   padding: 2px 9px;
+  border: none;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 600;
+  font-family: inherit;
   background: var(--accent-tint);
   color: var(--accent-dark);
   white-space: nowrap;
+  cursor: pointer;
 }
+.breakdown-chip:hover { opacity: 0.8; }
 .breakdown-chip.complete { background: #e1ead9; color: var(--success); }
 .stage-links { display: flex; gap: 14px; margin-top: 6px; }
-.stage-detail-toggle, .stage-dates-toggle {
+.stage-detail-toggle, .stage-dates-toggle, .work-dates-toggle {
   display: block;
   background: none;
   border: none;
@@ -314,13 +318,15 @@ main > .section-heading:first-child { margin-top: 0; }
   color: var(--accent);
   cursor: pointer;
 }
-.stage-detail-toggle:hover, .stage-dates-toggle:hover { color: var(--accent-dark); }
+.stage-detail-toggle:hover, .stage-dates-toggle:hover, .work-dates-toggle:hover { color: var(--accent-dark); }
 .stage-detail { margin-top: 10px; }
 .stage-detail .photo-grid { margin-bottom: 10px; }
 .stage-detail .list-item { padding: 9px 0; }
 .stage-dates-form { margin-top: 10px; padding: 10px; background: var(--bg); border-radius: 10px; max-width: 320px; }
 .stage-dates-form form { display: flex; flex-direction: column; gap: 8px; }
 .stage-dates-form label { font-size: 12px; }
+.breakdown-group { margin-top: 10px; }
+.breakdown-group:not(.hidden) { margin-bottom: 10px; }
 .design-pack-section { margin-bottom: 10px; }
 .design-pack-section form { margin-top: 10px; }
 .timeline .dot {
