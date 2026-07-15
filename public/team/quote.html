@@ -118,9 +118,9 @@
       });
     }
     document.getElementById('convert-card').classList.toggle('hidden', quote.status !== 'accepted');
-    await loadSupplierRequests();
-    await loadFiles();
-    await loadQna();
+    await loadSafely(loadSupplierRequests);
+    await loadSafely(loadFiles);
+    await loadSafely(loadQna);
   }
 
   async function loadQna() {

@@ -101,13 +101,13 @@
     if (!currentUser) return;
     renderTopbar(currentUser, 'Signage Portal');
     initTabs();
-    await loadScheduledWork();
-    await loadDesignPacks();
-    await loadProject();
-    await loadPhotos();
-    await loadDocuments();
-    await loadIssues();
-    await loadQna();
+    await loadSafely(loadScheduledWork);
+    await loadSafely(loadDesignPacks);
+    await loadSafely(loadProject);
+    await loadSafely(loadPhotos);
+    await loadSafely(loadDocuments);
+    await loadSafely(loadIssues);
+    await loadSafely(loadQna);
   })();
 
   function initTabs() {
