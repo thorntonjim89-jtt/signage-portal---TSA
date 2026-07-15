@@ -326,8 +326,24 @@ main > .section-heading:first-child { margin-top: 0; }
 .stage-dates-form { margin-top: 10px; padding: 10px; background: var(--bg); border-radius: 10px; max-width: 320px; }
 .stage-dates-form form { display: flex; flex-direction: column; gap: 8px; }
 .stage-dates-form label { font-size: 12px; }
-.breakdown-group { margin-top: 10px; }
-.breakdown-group:not(.hidden) { margin-bottom: 10px; }
+.breakdown-group:not(.hidden) {
+  margin: 10px 0;
+  padding: 12px 14px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+}
+.breakdown-group-header {
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  padding-bottom: 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.breakdown-group .list-item:last-child { border-bottom: none; }
 .design-pack-section { margin-bottom: 10px; }
 .design-pack-section form { margin-top: 10px; }
 .timeline .dot {
