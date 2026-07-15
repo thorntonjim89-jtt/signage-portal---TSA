@@ -208,6 +208,7 @@
           <strong>${escapeHtml(s.name)}</strong>
           <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
           ${breakdown ? `
+            <p class="muted breakdown-hint">Tap a sign type below to edit its items' dates individually:</p>
             <div class="scheduled-breakdown">
               ${breakdown.map(([tag, g]) => `<button type="button" class="breakdown-chip ${g.complete === g.total ? 'complete' : ''}" data-breakdown-tag="${escapeHtml(tag)}">${escapeHtml(tag)} ${g.complete}/${g.total}</button>`).join('')}
             </div>
@@ -215,10 +216,11 @@
           ` : ''}
           <div class="stage-links">
             ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button>` : ''}
-            <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">Edit Dates</button>
+            <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">${breakdown ? 'Edit Stage Dates (all items)' : 'Edit Dates'}</button>
           </div>
           <div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>
           <div class="stage-dates-form hidden" id="stage-dates-${s.stage_number}">
+            ${breakdown ? '<p class="muted" style="margin:0 0 8px;">This sets the stage\'s own overall dates, not any individual item\'s — tap a sign-type chip above to edit a specific item.</p>' : ''}
             <form data-dates-stage="${s.stage_number}">
               <label>Started<input type="date" name="startedAt" value="${toDateInputValue(s.started_at)}"></label>
               <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(s.completed_at)}"></label>
