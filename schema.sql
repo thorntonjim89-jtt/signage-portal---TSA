@@ -117,12 +117,20 @@ CREATE TABLE IF NOT EXISTS project_documents (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- A message belongs to exactly one of a project or a quote, so clients can
+-- ask questions before their request has even been priced, not just after
+-- it becomes a project.
 CREATE TABLE IF NOT EXISTS qna_messages (
   id SERIAL PRIMARY KEY,
-  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  project_id INTEGER REFERENCES projects(id) ON DELETE CASCADE,
+  quote_id INTEGER REFERENCES quotes(id) ON DELETE CASCADE,
   sender_id INTEGER NOT NULL REFERENCES users(id),
   message TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT qna_messages_one_parent CHECK (
+    (project_id IS NOT NULL AND quote_id IS NULL) OR
+    (project_id IS NULL AND quote_id IS NOT NULL)
+  )
 );
 
 -- Two separate, siloed channels for reporting problems on a project: a
