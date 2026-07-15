@@ -16,8 +16,7 @@
       <button class="tab-btn active" data-tab="photos">Photos</button>
       <button class="tab-btn" data-tab="scheduled-work">Scheduled Work</button>
       <button class="tab-btn" data-tab="documents">Documents</button>
-      <button class="tab-btn" data-tab="client-issues">Client Issues</button>
-      <button class="tab-btn" data-tab="supplier-issues">Supplier Issues</button>
+      <button class="tab-btn" data-tab="issues">Issues</button>
       <button class="tab-btn" data-tab="qna">Q&amp;A</button>
     </div>
 
@@ -56,12 +55,15 @@
       <div id="document-list" class="muted" style="margin-top:16px;">Loading…</div>
     </div>
 
-    <div class="tab-panel hidden" data-panel="client-issues">
-      <div id="client-issues-list" class="muted">Loading…</div>
-    </div>
-
-    <div class="tab-panel hidden" data-panel="supplier-issues">
-      <div id="supplier-issues-list" class="muted">Loading…</div>
+    <div class="tab-panel hidden" data-panel="issues">
+      <p class="muted">Shared punch list — visible to team, the client, and the assigned supplier.</p>
+      <form id="issue-form">
+        <label>Description<textarea name="description" rows="2" required placeholder="What's wrong?"></textarea></label>
+        <label>Photo (optional)<input type="file" name="photo" accept="image/*"></label>
+        <div class="actions"><button class="btn secondary" type="submit">Report Issue</button></div>
+        <div class="error hidden" id="issue-error"></div>
+      </form>
+      <div id="issues-list" class="muted" style="margin-top:16px;">Loading…</div>
     </div>
 
     <div class="tab-panel hidden" data-panel="qna">
@@ -118,8 +120,7 @@
     await loadProject();
     await loadPhotos();
     await loadDocuments();
-    await loadIssues('client');
-    await loadIssues('supplier');
+    await loadIssues();
     await loadQna();
   })();
 
@@ -553,30 +554,149 @@
     }
   });
 
-  async function loadIssues(source) {
-    const { issues } = await api('/project-issues?projectId=' + projectId + '&source=' + source);
-    const el = document.getElementById(source + '-issues-list');
+  const RESPONSE_STATUSES = [
+    { value: 'open', label: 'Open' },
+    { value: 'in_progress', label: 'In Progress' },
+    { value: 'resolved', label: 'Resolved' },
+    { value: 'wont_fix', label: "Won't Fix" },
+  ];
+
+  function renderResponses(responses) {
+    if (!responses.length) return '';
+    return `<div class="issue-responses">${responses.map((r) => `
+      <div class="issue-response">
+        <div class="meta">${escapeHtml(r.responder_name)} (${r.responder_role}) &middot; ${fmtDate(r.created_at)} &middot; <span class="badge ${r.status}">${r.status.replace('_', ' ')}</span></div>
+        ${r.description ? `<div>${escapeHtml(r.description)}</div>` : ''}
+        ${r.has_photo ? `<a href="#" data-file-url="/api/project-issue-response-file/${r.id}">photo</a>` : ''}
+      </div>`).join('')}</div>`;
+  }
+
+  function renderIssue(i) {
+    return `
+      <div class="list-item issue-item">
+        <div class="issue-item-header">
+          <div>
+            <div class="title">${escapeHtml(i.description)}</div>
+            <div class="meta">${escapeHtml(i.reported_by_name)} (${i.source}) &middot; ${fmtDate(i.created_at)}${i.has_photo ? ' &middot; <a href="#" data-file-url="/api/project-issue-file/' + i.id + '">photo</a>' : ''}</div>
+          </div>
+          <div class="list-item-actions">
+            <span class="badge ${i.status}">${i.status.replace('_', ' ')}</span>
+            <button class="btn secondary" type="button" data-respond-toggle="${i.id}">Respond</button>
+            ${i.has_photo ? `<button class="btn secondary" type="button" data-clear-photo="${i.id}">Remove Photo</button>` : ''}
+            <button class="btn danger" type="button" data-delete-issue="${i.id}">Delete</button>
+          </div>
+        </div>
+        ${renderResponses(i.responses)}
+        <div class="issue-respond-form hidden" id="respond-form-${i.id}">
+          <form data-respond-id="${i.id}">
+            <label>Status
+              <select name="status">
+                ${RESPONSE_STATUSES.map((s) => `<option value="${s.value}" ${s.value === i.status ? 'selected' : ''}>${s.label}</option>`).join('')}
+              </select>
+            </label>
+            <label>Description (optional)<textarea name="description" rows="2" placeholder="What did you do?"></textarea></label>
+            <label>Photo (optional)<input type="file" name="photo" accept="image/*"></label>
+            <div class="actions"><button class="btn" type="submit">Send Response</button></div>
+            <div class="error hidden" id="respond-error-${i.id}"></div>
+          </form>
+        </div>
+      </div>`;
+  }
+
+  async function loadIssues() {
+    const { issues } = await api('/project-issues?projectId=' + projectId);
+    const el = document.getElementById('issues-list');
     el.classList.remove('muted');
-    el.innerHTML = issues.length ? issues.map((i) => `
-      <div class="list-item">
-        <div>
-          <div class="title">${escapeHtml(i.description)}</div>
-          <div class="meta">${escapeHtml(i.reported_by_name)} &middot; ${fmtDate(i.created_at)}${i.has_photo ? ' &middot; <a href="#" data-file-url="/api/project-issue-file/' + i.id + '">photo</a>' : ''}</div>
-        </div>
-        <div class="list-item-actions">
-          <span class="badge ${i.status}">${i.status}</span>
-          <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'open' ? 'resolved' : 'open'}">${i.status === 'open' ? 'Mark Resolved' : 'Reopen'}</button>
-        </div>
-      </div>`).join('') : `<p class="muted">No ${source} issues reported.</p>`;
+    el.innerHTML = issues.length ? issues.map(renderIssue).join('') : '<p class="muted">No issues reported.</p>';
     wireFileLinks(el);
 
-    el.querySelectorAll('button[data-status]').forEach((btn) => {
+    el.querySelectorAll('button[data-respond-toggle]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.getElementById('respond-form-' + btn.dataset.respondToggle).classList.toggle('hidden');
+      });
+    });
+
+    el.querySelectorAll('button[data-clear-photo]').forEach((btn) => {
       btn.addEventListener('click', async () => {
-        await api('/project-issues/' + btn.dataset.id, { method: 'PATCH', body: { status: btn.dataset.status } });
-        await loadIssues(source);
+        if (!confirm('Remove this photo from the issue?')) return;
+        await api('/project-issues/' + btn.dataset.clearPhoto, { method: 'PATCH', body: { action: 'clearPhoto' } });
+        await loadIssues();
+      });
+    });
+
+    el.querySelectorAll('button[data-delete-issue]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this issue? This cannot be undone.')) return;
+        await api('/project-issues/' + btn.dataset.deleteIssue, { method: 'DELETE' });
+        await loadIssues();
+      });
+    });
+
+    el.querySelectorAll('form[data-respond-id]').forEach((form) => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const issueId = form.dataset.respondId;
+        const fd = new FormData(form);
+        const photo = fd.get('photo');
+        const status = fd.get('status');
+        const description = fd.get('description');
+        const errorEl = document.getElementById('respond-error-' + issueId);
+        errorEl.classList.add('hidden');
+        if (photo && photo.size && fileTooLarge(photo)) {
+          errorEl.textContent = `"${photo.name}" is larger than 50MB — please attach a smaller photo.`;
+          errorEl.classList.remove('hidden');
+          return;
+        }
+        try {
+          if (photo && photo.size) {
+            await uploadFileInChunks(photo, {
+              kind: 'issue-response-photo',
+              issueId,
+              status,
+              description,
+              contentType: photo.type || 'application/octet-stream',
+            });
+          } else {
+            await api('/project-issues/' + issueId, { method: 'PATCH', body: { status, description } });
+          }
+          await loadIssues();
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.classList.remove('hidden');
+        }
       });
     });
   }
+
+  document.getElementById('issue-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const form = new FormData(e.target);
+    const photo = form.get('photo');
+    const errorEl = document.getElementById('issue-error');
+    errorEl.classList.add('hidden');
+    if (photo && photo.size && fileTooLarge(photo)) {
+      errorEl.textContent = `"${photo.name}" is larger than 50MB — please attach a smaller photo.`;
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    try {
+      if (photo && photo.size) {
+        await uploadFileInChunks(photo, {
+          kind: 'issue-photo',
+          projectId,
+          description: form.get('description'),
+          contentType: photo.type || 'application/octet-stream',
+        });
+      } else {
+        await api('/project-issues', { method: 'POST', body: { projectId, description: form.get('description') } });
+      }
+      e.target.reset();
+      await loadIssues();
+    } catch (err) {
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
+    }
+  });
 
   async function loadQna() {
     const { messages } = await api('/qna?projectId=' + projectId);

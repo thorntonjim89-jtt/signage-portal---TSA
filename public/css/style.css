@@ -197,6 +197,7 @@ label {
 .badge.resolved { background: #e1ead9; color: var(--success); }
 .badge.pending { background: #e7dcc0; color: var(--muted); }
 .badge.scheduled { background: var(--accent-tint); color: var(--accent-dark); }
+.badge.wont_fix { background: #e7dcc0; color: var(--muted); }
 
 .tag {
   display: inline-block;
@@ -362,6 +363,13 @@ main > .section-heading:first-child { margin-top: 0; }
 .qna-msg { background: #f2ead9; border-radius: 12px; padding: 9px 13px; max-width: 80%; }
 .qna-msg.mine { align-self: flex-end; background: var(--accent-tint); }
 .qna-msg .meta { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
+
+.issue-item { flex-direction: column; align-items: stretch; }
+.issue-item-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; row-gap: 10px; gap: 14px; width: 100%; }
+.issue-responses { margin: 10px 0 0; padding-left: 14px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
+.issue-response { font-size: 13px; }
+.issue-response .meta { color: var(--muted); margin-bottom: 2px; }
+.issue-respond-form { margin-top: 12px; padding-top: 12px; border-top: 1px solid var(--border); }
 
 .muted { color: var(--muted); }
 .hidden { display: none !important; }

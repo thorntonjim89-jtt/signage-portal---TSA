@@ -49,17 +49,30 @@
       </li>`).join('');
   }
 
+  function renderIssueResponses(responses) {
+    if (!responses.length) return '';
+    return `<div class="issue-responses">${responses.map((r) => `
+      <div class="issue-response">
+        <div class="meta">${escapeHtml(r.responder_name)} &middot; ${fmtDate(r.created_at)} &middot; <span class="badge ${r.status}">${r.status.replace('_', ' ')}</span></div>
+        ${r.description ? `<div>${escapeHtml(r.description)}</div>` : ''}
+        ${r.has_photo ? `<a href="#" data-file-url="/api/project-issue-response-file/${r.id}">photo</a>` : ''}
+      </div>`).join('')}</div>`;
+  }
+
   async function loadIssues() {
-    const { issues } = await api('/project-issues?projectId=' + projectId + '&source=supplier');
+    const { issues } = await api('/project-issues?projectId=' + projectId);
     const el = document.getElementById('issues-list');
     el.classList.remove('muted');
     el.innerHTML = issues.length ? issues.map((i) => `
-      <div class="list-item">
-        <div>
-          <div class="title">${escapeHtml(i.description)}</div>
-          <div class="meta">${fmtDate(i.created_at)}${i.has_photo ? ' &middot; <a href="#" data-file-url="/api/project-issue-file/' + i.id + '">photo</a>' : ''}</div>
+      <div class="list-item issue-item">
+        <div class="issue-item-header">
+          <div>
+            <div class="title">${escapeHtml(i.description)}</div>
+            <div class="meta">${fmtDate(i.created_at)}${i.has_photo ? ' &middot; <a href="#" data-file-url="/api/project-issue-file/' + i.id + '">photo</a>' : ''}</div>
+          </div>
+          <span class="badge ${i.status}">${i.status.replace('_', ' ')}</span>
         </div>
-        <span class="badge ${i.status}">${i.status}</span>
+        ${renderIssueResponses(i.responses)}
       </div>`).join('') : '<p class="muted">No issues reported.</p>';
     wireFileLinks(el);
   }
