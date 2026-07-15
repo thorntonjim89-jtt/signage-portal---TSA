@@ -13,6 +13,11 @@ async function assertProjectAccess(user, projectId) {
   return project;
 }
 
+function parseQuantity(value) {
+  const qty = Number(value);
+  return Number.isInteger(qty) && qty >= 1 ? qty : null;
+}
+
 async function listScheduledWork(user, event) {
   const projectId = event.queryStringParameters && event.queryStringParameters.projectId;
   if (!projectId) return json(400, { error: 'projectId query parameter is required' });
@@ -21,7 +26,7 @@ async function listScheduledWork(user, event) {
   if (!project) return json(403, { error: 'Forbidden' });
 
   const result = await query(
-    'SELECT id, project_id, description, scheduled_date, status, completed_at, created_at FROM scheduled_work WHERE project_id = $1 ORDER BY scheduled_date ASC',
+    'SELECT id, project_id, description, quantity, scheduled_date, status, completed_at, created_at FROM scheduled_work WHERE project_id = $1 ORDER BY scheduled_date ASC',
     [projectId]
   );
   return json(200, { items: result.rows });
@@ -44,15 +49,17 @@ async function createScheduledWork(user, event) {
   if (Number.isNaN(new Date(scheduledDate).getTime())) {
     return json(400, { error: 'scheduledDate must be a valid date' });
   }
+  const quantity = data.quantity === undefined ? 1 : parseQuantity(data.quantity);
+  if (quantity === null) return json(400, { error: 'quantity must be a whole number of 1 or more' });
 
   const project = await assertProjectAccess(user, projectId);
   if (!project) return json(403, { error: 'Forbidden' });
 
   const result = await query(
-    `INSERT INTO scheduled_work (project_id, description, scheduled_date, created_by)
-     VALUES ($1, $2, $3, $4)
-     RETURNING id, project_id, description, scheduled_date, status, completed_at, created_at`,
-    [projectId, description.trim(), scheduledDate, user.id]
+    `INSERT INTO scheduled_work (project_id, description, quantity, scheduled_date, created_by)
+     VALUES ($1, $2, $3, $4, $5)
+     RETURNING id, project_id, description, quantity, scheduled_date, status, completed_at, created_at`,
+    [projectId, description.trim(), quantity, scheduledDate, user.id]
   );
   return json(201, { item: result.rows[0] });
 }
@@ -61,10 +68,14 @@ async function updateScheduledWork(user, id, data) {
   if (user.role !== 'team') return json(403, { error: 'Only team can update scheduled work' });
 
   // A plain status toggle stamps completed_at as "now" for the common case;
-  // setDates lets team correct the scheduled date or record the actual
-  // completion date directly, the same way stage dates work on the timeline.
-  if (data.action === 'setDates') {
-    const { scheduledDate, completedAt } = data;
+  // "edit" is the full item editor (description, quantity, both dates) — the
+  // same fields shown pre-filled together, so a mis-entered quantity or a
+  // typo doesn't require a separate action from correcting a date.
+  if (data.action === 'edit') {
+    const { description, scheduledDate, completedAt } = data;
+    if (!description || !description.trim()) return json(400, { error: 'description is required' });
+    const quantity = parseQuantity(data.quantity);
+    if (quantity === null) return json(400, { error: 'quantity must be a whole number of 1 or more' });
     if (!scheduledDate || Number.isNaN(new Date(scheduledDate).getTime())) {
       return json(400, { error: 'scheduledDate must be a valid date' });
     }
@@ -75,9 +86,10 @@ async function updateScheduledWork(user, id, data) {
     }
     const status = completed ? 'complete' : 'scheduled';
     const result = await query(
-      `UPDATE scheduled_work SET scheduled_date = $1, completed_at = $2, status = $3 WHERE id = $4
-       RETURNING id, project_id, description, scheduled_date, status, completed_at, created_at`,
-      [scheduledDate, completed, status, id]
+      `UPDATE scheduled_work SET description = $1, quantity = $2, scheduled_date = $3, completed_at = $4, status = $5
+       WHERE id = $6
+       RETURNING id, project_id, description, quantity, scheduled_date, status, completed_at, created_at`,
+      [description.trim(), quantity, scheduledDate, completed, status, id]
     );
     if (!result.rows.length) return json(404, { error: 'Scheduled work item not found' });
     return json(200, { item: result.rows[0] });
@@ -91,7 +103,7 @@ async function updateScheduledWork(user, id, data) {
   const setClause = status === 'complete' ? 'status = $1, completed_at = now()' : 'status = $1, completed_at = NULL';
   const result = await query(
     `UPDATE scheduled_work SET ${setClause} WHERE id = $2
-     RETURNING id, project_id, description, scheduled_date, status, completed_at, created_at`,
+     RETURNING id, project_id, description, quantity, scheduled_date, status, completed_at, created_at`,
     [status, id]
   );
   if (!result.rows.length) return json(404, { error: 'Scheduled work item not found' });
