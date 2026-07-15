@@ -272,7 +272,10 @@
         const isHidden = groupEl.classList.contains('hidden');
         if (isHidden) {
           const items = scheduledWorkItems.filter((i) => (splitSignType(i.description).tag || 'Other') === tag);
-          groupEl.innerHTML = items.map(renderScheduledItem).join('');
+          const completeCount = items.filter((i) => i.status === 'complete').length;
+          groupEl.innerHTML = `
+            <div class="breakdown-group-header">${escapeHtml(tag)} <span class="muted">&middot; ${completeCount}/${items.length} complete</span></div>
+            ${items.map(renderScheduledItem).join('')}`;
           wireScheduledItemEvents(groupEl);
         }
         groupEl.classList.toggle('hidden', !isHidden);
