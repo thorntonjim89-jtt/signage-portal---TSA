@@ -174,6 +174,7 @@ CREATE TABLE IF NOT EXISTS scheduled_work (
   id SERIAL PRIMARY KEY,
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   description TEXT NOT NULL,
+  quantity INTEGER NOT NULL DEFAULT 1,
   scheduled_date DATE NOT NULL,
   status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'complete')),
   completed_at TIMESTAMPTZ,

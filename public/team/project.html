@@ -35,6 +35,7 @@
     <div class="tab-panel hidden" data-panel="scheduled-work">
       <form id="scheduled-work-form">
         <label>Description<input type="text" name="description" required placeholder="e.g. Ceiling signage install — Levels 23-28"></label>
+        <label>Quantity<input type="number" name="quantity" min="1" value="1" required></label>
         <label>Scheduled date<input type="date" name="scheduledDate" required></label>
         <div class="actions"><button class="btn secondary" type="submit">Add Scheduled Work</button></div>
         <div class="error hidden" id="scheduled-work-error"></div>
@@ -186,8 +187,11 @@
       const key = tag || 'Other';
       if (!groups.has(key)) groups.set(key, { total: 0, complete: 0 });
       const g = groups.get(key);
-      g.total += 1;
-      if (i.status === 'complete') g.complete += 1;
+      // Counted in sign units (quantity), not tracker rows — one row can
+      // cover many physical signs (e.g. "12 pocket signs on Level 26").
+      const qty = i.quantity || 1;
+      g.total += qty;
+      if (i.status === 'complete') g.complete += qty;
     });
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }
@@ -272,9 +276,10 @@
         const isHidden = groupEl.classList.contains('hidden');
         if (isHidden) {
           const items = scheduledWorkItems.filter((i) => (splitSignType(i.description).tag || 'Other') === tag);
-          const completeCount = items.filter((i) => i.status === 'complete').length;
+          const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
+          const completeQty = items.filter((i) => i.status === 'complete').reduce((sum, i) => sum + (i.quantity || 1), 0);
           groupEl.innerHTML = `
-            <div class="breakdown-group-header">${escapeHtml(tag)} <span class="muted">&middot; ${completeCount}/${items.length} complete</span></div>
+            <div class="breakdown-group-header">${escapeHtml(tag)} <span class="muted">&middot; ${completeQty}/${totalQty} complete</span></div>
             ${items.map(renderScheduledItem).join('')}`;
           wireScheduledItemEvents(groupEl);
         }
@@ -395,8 +400,8 @@
     return `
       <div class="list-item">
         <div>
-          <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}</div>
-          <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+          <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}</div>
+          <div class="meta">Qty ${i.quantity} &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
         </div>
         <span class="badge ${i.status}">${i.status}</span>
       </div>`;
@@ -565,9 +570,9 @@
       <div class="list-item issue-item">
         <div class="issue-item-header">
           <div>
-            <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}</div>
-            <div class="meta">Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
-            <button type="button" class="work-dates-toggle" data-work-dates="${i.id}">Edit Dates</button>
+            <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}</div>
+            <div class="meta">Qty ${i.quantity} &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+            <button type="button" class="work-dates-toggle" data-work-dates="${i.id}">Edit Item</button>
           </div>
           <div class="list-item-actions">
             <span class="badge ${i.status}">${i.status}</span>
@@ -577,9 +582,11 @@
         </div>
         <div class="stage-dates-form hidden" id="work-dates-${i.id}">
           <form data-work-dates-id="${i.id}">
+            <label>Description<input type="text" name="description" value="${escapeHtml(i.description)}" required></label>
+            <label>Quantity<input type="number" name="quantity" min="1" value="${i.quantity}" required></label>
             <label>Scheduled date<input type="date" name="scheduledDate" value="${i.scheduled_date ? String(i.scheduled_date).slice(0, 10) : ''}" required></label>
             <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(i.completed_at)}"></label>
-            <div class="actions"><button class="btn secondary" type="submit">Save Dates</button></div>
+            <div class="actions"><button class="btn secondary" type="submit">Save</button></div>
             <div class="error hidden" id="work-dates-error-${i.id}"></div>
           </form>
         </div>
@@ -625,7 +632,9 @@
           await api('/scheduled-work/' + workId, {
             method: 'PATCH',
             body: {
-              action: 'setDates',
+              action: 'edit',
+              description: fd.get('description'),
+              quantity: Number(fd.get('quantity')) || 1,
               scheduledDate: fd.get('scheduledDate'),
               completedAt: fd.get('completedAt') || null,
             },
@@ -680,7 +689,12 @@
     try {
       await api('/scheduled-work', {
         method: 'POST',
-        body: { projectId, description: form.get('description'), scheduledDate: form.get('scheduledDate') },
+        body: {
+          projectId,
+          description: form.get('description'),
+          quantity: Number(form.get('quantity')) || 1,
+          scheduledDate: form.get('scheduledDate'),
+        },
       });
       e.target.reset();
       await loadScheduledWork();
