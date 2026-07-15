@@ -181,6 +181,12 @@
     return `${complete} of ${scheduledWorkItems.length} scheduled items complete`;
   }
 
+  // <input type="date"> needs a plain YYYY-MM-DD value, not a locale string.
+  function toDateInputValue(value) {
+    if (!value) return '';
+    return new Date(value).toISOString().slice(0, 10);
+  }
+
   function renderTimeline() {
     document.getElementById('timeline').innerHTML = stages.map((s) => `
       <li class="${s.status}">
@@ -189,7 +195,20 @@
           <strong>${escapeHtml(s.name)}</strong>
           <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
           ${s.name === 'Installed & Complete' && scheduledWorkSummary() ? `<div class="meta">${scheduledWorkSummary()}</div>` : ''}
-          ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button><div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>` : ''}
+          <div class="stage-links">
+            ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button>` : ''}
+            <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">Edit Dates</button>
+          </div>
+          <div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>
+          <div class="stage-dates-form hidden" id="stage-dates-${s.stage_number}">
+            <form data-dates-stage="${s.stage_number}">
+              <label>Started<input type="date" name="startedAt" value="${toDateInputValue(s.started_at)}"></label>
+              <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(s.completed_at)}"></label>
+              <div class="actions"><button class="btn secondary" type="submit">Save Dates</button></div>
+              <p class="muted" style="margin:4px 0 0;">Clear both to reset this stage to pending.</p>
+              <div class="error hidden" id="stage-dates-error-${s.stage_number}"></div>
+            </form>
+          </div>
         </div>
         <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
         <div class="stage-actions">
@@ -216,6 +235,37 @@
         if (isHidden) renderStageDetail(stageNumber, detailEl);
         detailEl.classList.toggle('hidden', !isHidden);
         btn.textContent = isHidden ? 'Details ▴' : 'Details ▾';
+      });
+    });
+
+    document.querySelectorAll('.stage-dates-toggle').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.getElementById('stage-dates-' + btn.dataset.stage).classList.toggle('hidden');
+      });
+    });
+
+    document.querySelectorAll('form[data-dates-stage]').forEach((form) => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const stageNumber = Number(form.dataset.datesStage);
+        const fd = new FormData(form);
+        const errorEl = document.getElementById('stage-dates-error-' + stageNumber);
+        errorEl.classList.add('hidden');
+        try {
+          await api('/projects/' + projectId, {
+            method: 'PATCH',
+            body: {
+              action: 'setStageDates',
+              stageNumber,
+              startedAt: fd.get('startedAt') || null,
+              completedAt: fd.get('completedAt') || null,
+            },
+          });
+          await loadProject();
+        } catch (err) {
+          errorEl.textContent = err.message;
+          errorEl.classList.remove('hidden');
+        }
       });
     });
   }
