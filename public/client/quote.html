@@ -34,8 +34,8 @@
     if (!currentUser) return;
     renderTopbar(currentUser, 'Signage Portal');
     await load();
-    await loadFiles();
-    await loadQna();
+    await loadSafely(loadFiles);
+    await loadSafely(loadQna);
   })();
 
   async function load() {

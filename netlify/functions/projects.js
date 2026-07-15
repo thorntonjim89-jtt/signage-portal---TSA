@@ -152,8 +152,17 @@ async function updateStage(user, id, data) {
     return json(400, { error: 'status must be one of pending, in_progress, complete' });
   }
 
-  const timestampCol = status === 'in_progress' ? 'started_at' : status === 'complete' ? 'completed_at' : null;
-  const setClause = timestampCol ? `status = $1, ${timestampCol} = now()` : 'status = $1';
+  // A stage moved back to in_progress or pending after being marked complete
+  // must drop its stale completed_at — otherwise the UI shows a contradictory
+  // "in progress" badge next to a leftover "Completed <old date>" line.
+  let setClause;
+  if (status === 'in_progress') {
+    setClause = 'status = $1, started_at = COALESCE(started_at, now()), completed_at = NULL';
+  } else if (status === 'complete') {
+    setClause = 'status = $1, started_at = COALESCE(started_at, now()), completed_at = now()';
+  } else {
+    setClause = 'status = $1, started_at = NULL, completed_at = NULL';
+  }
 
   const result = await query(
     `UPDATE project_stages SET ${setClause} WHERE project_id = $2 AND stage_number = $3 RETURNING *`,

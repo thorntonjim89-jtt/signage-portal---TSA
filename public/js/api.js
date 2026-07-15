@@ -84,6 +84,20 @@ function wireFileLinks(container) {
   });
 }
 
+// A page's init sequence awaits several independent section loaders in a
+// row (photos, documents, issues, Q&A...). Without this, one section
+// throwing (e.g. a table missing after a migration hasn't run yet) aborts
+// every loader still queued after it, even though they have nothing to do
+// with the failure — the rest of the page just gets stuck on "Loading…"
+// with no visible error. Wrapping each call keeps sections independent.
+async function loadSafely(fn) {
+  try {
+    await fn();
+  } catch (err) {
+    console.error(err);
+  }
+}
+
 async function api(path, options) {
   const opts = Object.assign({ credentials: 'include', headers: {} }, options || {});
   if (opts.body && typeof opts.body !== 'string') {

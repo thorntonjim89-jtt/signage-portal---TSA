@@ -31,8 +31,8 @@
     const user = await requireRole(['supplier']);
     if (!user) return;
     renderTopbar(user, 'Signage Portal — Supplier');
-    await loadProject();
-    await loadIssues();
+    await loadSafely(loadProject);
+    await loadSafely(loadIssues);
   })();
 
   async function loadProject() {
