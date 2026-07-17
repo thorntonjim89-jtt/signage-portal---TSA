@@ -188,6 +188,21 @@ CREATE TABLE IF NOT EXISTS scheduled_work (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- A running log of dated entries per program stage — the stage itself only
+-- has one started_at/completed_at pair, which can't capture "shipment
+-- dispatched 15 Jul, customs cleared 17 Jul, arrived on site 20 Jul" as
+-- three separate events with their own notes. Team adds entries; client and
+-- team both see them (see stage-notes.js).
+CREATE TABLE IF NOT EXISTS stage_notes (
+  id SERIAL PRIMARY KEY,
+  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+  stage_number INTEGER NOT NULL CHECK (stage_number BETWEEN 1 AND 7),
+  entry_date DATE NOT NULL,
+  note TEXT NOT NULL,
+  created_by INTEGER NOT NULL REFERENCES users(id),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Temporary holding area for large-file uploads. The browser splits a big
 -- file into pieces small enough to fit in a single Netlify Function request
 -- and uploads them here one at a time (upload-chunk.js); once they're all in,
