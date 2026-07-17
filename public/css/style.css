@@ -280,16 +280,13 @@ main > .section-heading:first-child { margin-top: 0; }
 .tabs button.active { background: var(--ink); color: #fff; border-color: var(--ink); }
 
 .timeline { list-style: none; padding: 0; margin: 0; }
-.timeline li {
-  display: flex;
-  align-items: flex-start;
-  flex-wrap: wrap;
-  row-gap: 8px;
-  gap: 12px;
-  padding: 14px 0;
-  border-bottom: 1px solid var(--border);
-}
+.timeline li { padding: 14px 0; border-bottom: 1px solid var(--border); }
 .timeline li:last-child { border-bottom: none; }
+/* Separated from .timeline li itself so the breakdown table below (a
+   sibling, not a child of this row) can use the row's full width instead
+   of being squeezed into whatever timeline-info has left over next to the
+   badge/stage-actions columns. */
+.timeline-row { display: flex; align-items: flex-start; flex-wrap: wrap; row-gap: 8px; gap: 12px; }
 .timeline-info { flex: 1 1 200px; min-width: 0; }
 .timeline .meta { margin-top: 3px; font-size: 13px; color: var(--text); opacity: 0.75; }
 .timeline .stage-actions { display: flex; gap: 6px; flex-wrap: wrap; }
@@ -317,6 +314,31 @@ main > .section-heading:first-child { margin-top: 0; }
   padding-top: 10px;
 }
 .breakdown-row-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+
+/* Below 700px (the breakpoint the rest of the timeline already switches
+   on), a 5-column table has no room to breathe — turn each row into its
+   own labeled card instead of forcing horizontal scroll. */
+@media (max-width: 699px) {
+  .breakdown-table thead { display: none; }
+  .breakdown-table, .breakdown-table tbody, .breakdown-table tr, .breakdown-table td { display: block; width: 100%; }
+  .breakdown-table tr:not(.breakdown-table-group):not(.hidden) {
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    margin-bottom: 8px;
+    padding: 8px 10px;
+  }
+  .breakdown-table td { border-bottom: none; padding: 3px 0; }
+  .breakdown-table td[data-label]::before {
+    content: attr(data-label) ": ";
+    font-weight: 600;
+    font-size: 11px;
+    text-transform: uppercase;
+    color: var(--muted);
+  }
+  .breakdown-table td.breakdown-row-actions { display: flex; padding-top: 6px; }
+  .breakdown-table-group td { border-radius: 8px; margin: 10px 0 4px; padding: 8px; }
+}
+
 .stage-links { display: flex; gap: 14px; margin-top: 6px; }
 .stage-detail-toggle, .stage-dates-toggle, .work-dates-toggle {
   display: block;
@@ -376,7 +398,7 @@ main > .section-heading:first-child { margin-top: 0; }
    fixed-width columns so they line up in a vertical line across every
    stage row, regardless of how long each stage's name or button set is. */
 @media (min-width: 700px) {
-  .timeline li { flex-wrap: nowrap; }
+  .timeline-row { flex-wrap: nowrap; }
   .timeline .badge { flex: 0 0 108px; margin-top: 2px; text-align: center; }
   .timeline .stage-actions { flex: 0 0 200px; justify-content: flex-end; }
 }
