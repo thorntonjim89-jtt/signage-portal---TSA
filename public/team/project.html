@@ -217,32 +217,34 @@
       const breakdown = s.name === 'Installed & Complete' ? scheduledWorkBreakdown() : null;
       return `
       <li class="${s.status}">
-        <span class="dot">${s.status === 'complete' ? '✓' : s.stage_number}</span>
-        <div class="timeline-info">
-          <strong>${escapeHtml(s.name)}</strong>
-          <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
-          ${breakdown ? renderBreakdownTable(breakdown) : ''}
-          <div class="stage-links">
-            ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button>` : ''}
-            <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">${breakdown ? 'Edit Stage Dates (all items)' : 'Edit Dates'}</button>
+        <div class="timeline-row">
+          <span class="dot">${s.status === 'complete' ? '✓' : s.stage_number}</span>
+          <div class="timeline-info">
+            <strong>${escapeHtml(s.name)}</strong>
+            <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
+            <div class="stage-links">
+              ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button>` : ''}
+              <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">${breakdown ? 'Edit Stage Dates (all items)' : 'Edit Dates'}</button>
+            </div>
+            <div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>
+            <div class="stage-dates-form hidden" id="stage-dates-${s.stage_number}">
+              ${breakdown ? '<p class="muted" style="margin:0 0 8px;">This sets the stage\'s own overall dates, not any individual item\'s — edit a specific item directly in the table below.</p>' : ''}
+              <form data-dates-stage="${s.stage_number}">
+                <label>Started<input type="date" name="startedAt" value="${toDateInputValue(s.started_at)}"></label>
+                <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(s.completed_at)}"></label>
+                <div class="actions"><button class="btn secondary" type="submit">Save Dates</button></div>
+                <p class="muted" style="margin:4px 0 0;">Clear both to reset this stage to pending.</p>
+                <div class="error hidden" id="stage-dates-error-${s.stage_number}"></div>
+              </form>
+            </div>
           </div>
-          <div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>
-          <div class="stage-dates-form hidden" id="stage-dates-${s.stage_number}">
-            ${breakdown ? '<p class="muted" style="margin:0 0 8px;">This sets the stage\'s own overall dates, not any individual item\'s — edit a specific item directly in the table above.</p>' : ''}
-            <form data-dates-stage="${s.stage_number}">
-              <label>Started<input type="date" name="startedAt" value="${toDateInputValue(s.started_at)}"></label>
-              <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(s.completed_at)}"></label>
-              <div class="actions"><button class="btn secondary" type="submit">Save Dates</button></div>
-              <p class="muted" style="margin:4px 0 0;">Clear both to reset this stage to pending.</p>
-              <div class="error hidden" id="stage-dates-error-${s.stage_number}"></div>
-            </form>
+          <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
+          <div class="stage-actions">
+            ${s.status !== 'in_progress' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="in_progress">Start</button>` : ''}
+            ${s.status !== 'complete' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="complete">Complete</button>` : ''}
           </div>
         </div>
-        <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
-        <div class="stage-actions">
-          ${s.status !== 'in_progress' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="in_progress">Start</button>` : ''}
-          ${s.status !== 'complete' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="complete">Complete</button>` : ''}
-        </div>
+        ${breakdown ? renderBreakdownTable(breakdown) : ''}
       </li>`;
     }).join('');
 
@@ -614,10 +616,10 @@
           ${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}
           ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
         </td>
-        <td>${i.completed_quantity}/${i.quantity}</td>
-        <td>${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? `<div class="muted">Done ${fmtDateShort(i.completed_at)}</div>` : ''}</td>
-        <td><span class="badge ${i.status}">${i.status.replace('_', ' ')}</span></td>
-        <td class="breakdown-row-actions">
+        <td data-label="Done">${i.completed_quantity}/${i.quantity}</td>
+        <td data-label="Scheduled">${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? `<div class="muted">Done ${fmtDateShort(i.completed_at)}</div>` : ''}</td>
+        <td data-label="Status"><span class="badge ${i.status}">${i.status.replace('_', ' ')}</span></td>
+        <td class="breakdown-row-actions" data-label="Actions">
           <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'complete' ? 'scheduled' : 'complete'}">${i.status === 'complete' ? 'Reopen' : 'Mark Complete'}</button>
           <button type="button" class="work-dates-toggle" data-work-dates="${i.id}">Edit Item</button>
           <button class="btn danger" data-delete-id="${i.id}">Delete</button>

@@ -152,14 +152,16 @@
       const breakdown = s.name === 'Installed & Complete' ? scheduledWorkBreakdown() : null;
       return `
       <li class="${s.status}">
-        <span class="dot">${s.status === 'complete' ? '✓' : s.stage_number}</span>
-        <div class="timeline-info">
-          <strong>${escapeHtml(s.name)}</strong>
-          <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
-          ${breakdown ? renderBreakdownTable(breakdown) : ''}
-          ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button><div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>` : ''}
+        <div class="timeline-row">
+          <span class="dot">${s.status === 'complete' ? '✓' : s.stage_number}</span>
+          <div class="timeline-info">
+            <strong>${escapeHtml(s.name)}</strong>
+            <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
+            ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button><div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>` : ''}
+          </div>
+          <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
         </div>
-        <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
+        ${breakdown ? renderBreakdownTable(breakdown) : ''}
       </li>`;
     }).join('');
 
@@ -242,8 +244,8 @@
               ${itemTag ? `<span class="tag">${escapeHtml(itemTag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}
               ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
             </td>
-            <td>${i.completed_quantity}/${i.quantity}</td>
-            <td><span class="badge ${i.status}">${i.status.replace('_', ' ')}</span></td>
+            <td data-label="Done">${i.completed_quantity}/${i.quantity}</td>
+            <td data-label="Status"><span class="badge ${i.status}">${i.status.replace('_', ' ')}</span></td>
           </tr>`;
       }).join('');
       return groupRow + itemRows;
