@@ -7,7 +7,7 @@
   <div class="card" id="project-header">Loading…</div>
 
   <div class="card">
-    <h2>Timeline</h2>
+    <h2>Program</h2>
     <ul class="timeline" id="timeline"></ul>
   </div>
 
@@ -67,6 +67,7 @@
   let currentUser;
   let scheduledWorkItems = [];
   let stages = [];
+  let stageNotes = [];
   let allPhotos = [];
   let designPacks = [];
 
@@ -96,6 +97,11 @@
     designPacks = files;
   }
 
+  async function loadStageNotes() {
+    const { notes } = await api('/stage-notes?projectId=' + projectId);
+    stageNotes = notes;
+  }
+
   (async () => {
     currentUser = await requireRole(['client']);
     if (!currentUser) return;
@@ -103,6 +109,7 @@
     initTabs();
     await loadSafely(loadScheduledWork);
     await loadSafely(loadDesignPacks);
+    await loadSafely(loadStageNotes);
     await loadSafely(loadProject);
     await loadSafely(loadPhotos);
     await loadSafely(loadDocuments);
@@ -141,6 +148,21 @@
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }
 
+  // Read-only counterpart to team's editable version — same running log of
+  // dated notes per stage, no add form or delete control.
+  function renderStageNotes(stageNumber) {
+    const notes = stageNotes.filter((n) => n.stage_number === stageNumber);
+    if (!notes.length) return '';
+    return `
+      <div class="stage-notes">
+        ${notes.map((n) => `
+          <div class="stage-note">
+            <span class="stage-note-date">${fmtDateShort(n.entry_date)}</span>
+            <span class="stage-note-text">${escapeHtml(n.note)}</span>
+          </div>`).join('')}
+      </div>`;
+  }
+
   async function loadProject() {
     const { project } = await api('/projects/' + projectId);
     stages = project.stages;
@@ -157,6 +179,7 @@
           <div class="timeline-info">
             <strong>${escapeHtml(s.name)}</strong>
             <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
+            ${renderStageNotes(s.stage_number)}
             ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button><div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>` : ''}
           </div>
           <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>

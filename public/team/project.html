@@ -7,7 +7,7 @@
   <div class="card" id="project-header">Loading…</div>
 
   <div class="card">
-    <h2>Timeline</h2>
+    <h2>Program</h2>
     <ul class="timeline" id="timeline"></ul>
   </div>
 
@@ -92,6 +92,7 @@
   let currentUser;
   let stages = [];
   let scheduledWorkItems = [];
+  let stageNotes = [];
   let allPhotos = [];
   let designPacks = [];
 
@@ -121,6 +122,11 @@
     designPacks = files;
   }
 
+  async function loadStageNotes() {
+    const { notes } = await api('/stage-notes?projectId=' + projectId);
+    stageNotes = notes;
+  }
+
   (async () => {
     currentUser = await requireRole(['team']);
     if (!currentUser) return;
@@ -128,6 +134,7 @@
     initTabs();
     await loadSafely(loadScheduledWork);
     await loadSafely(loadDesignPacks);
+    await loadSafely(loadStageNotes);
     await loadSafely(loadProject);
     await loadSafely(loadPhotos);
     await loadSafely(loadDocuments);
@@ -212,6 +219,30 @@
     return new Date(value).toISOString().slice(0, 10);
   }
 
+  // A stage's started_at/completed_at is one pair of dates for the whole
+  // stage — real progress inside a stage is rarely one event ("Shipping"
+  // might have a dispatch date, a customs date, and an arrival date, each
+  // worth a note). This is a running log team can add to freely, distinct
+  // from the stage's own start/complete dates.
+  function renderStageNotes(stageNumber) {
+    const notes = stageNotes.filter((n) => n.stage_number === stageNumber);
+    const todayValue = new Date().toISOString().slice(0, 10);
+    return `
+      <div class="stage-notes">
+        ${notes.map((n) => `
+          <div class="stage-note">
+            <span class="stage-note-date">${fmtDateShort(n.entry_date)}</span>
+            <span class="stage-note-text">${escapeHtml(n.note)}</span>
+            <button type="button" class="stage-note-delete" data-delete-note="${n.id}" title="Delete note">&times;</button>
+          </div>`).join('')}
+        <form class="stage-note-form" data-note-stage="${stageNumber}">
+          <input type="date" name="entryDate" value="${todayValue}" required>
+          <input type="text" name="note" placeholder="Add a dated note…" required>
+          <button class="btn secondary" type="submit">Add</button>
+        </form>
+      </div>`;
+  }
+
   function renderTimeline() {
     document.getElementById('timeline').innerHTML = stages.map((s) => {
       const breakdown = s.name === 'Installed & Complete' ? scheduledWorkBreakdown() : null;
@@ -222,6 +253,7 @@
           <div class="timeline-info">
             <strong>${escapeHtml(s.name)}</strong>
             <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
+            ${renderStageNotes(s.stage_number)}
             <div class="stage-links">
               ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button>` : ''}
               <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">${breakdown ? 'Edit Stage Dates (all items)' : 'Edit Dates'}</button>
@@ -277,6 +309,37 @@
     document.querySelectorAll('.stage-dates-toggle').forEach((btn) => {
       btn.addEventListener('click', () => {
         document.getElementById('stage-dates-' + btn.dataset.stage).classList.toggle('hidden');
+      });
+    });
+
+    document.querySelectorAll('form[data-note-stage]').forEach((form) => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        try {
+          await api('/stage-notes', {
+            method: 'POST',
+            body: {
+              projectId,
+              stageNumber: Number(form.dataset.noteStage),
+              entryDate: fd.get('entryDate'),
+              note: fd.get('note'),
+            },
+          });
+          await loadStageNotes();
+          renderTimeline();
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    });
+
+    document.querySelectorAll('button[data-delete-note]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this note?')) return;
+        await api('/stage-notes/' + btn.dataset.deleteNote, { method: 'DELETE' });
+        await loadStageNotes();
+        renderTimeline();
       });
     });
 
