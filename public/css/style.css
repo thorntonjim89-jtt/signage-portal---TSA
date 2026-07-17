@@ -316,15 +316,24 @@ main > .section-heading:first-child { margin-top: 0; }
 }
 .breakdown-table td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
 .breakdown-table tr:last-child td { border-bottom: none; }
-.breakdown-table-group td {
+.breakdown-table-group td { background: var(--bg); padding: 0; }
+.group-toggle {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 10px 8px 8px;
+  font-family: inherit;
   font-weight: 700;
   font-size: 12px;
   letter-spacing: 0.02em;
   text-transform: uppercase;
   color: var(--accent-dark);
-  background: var(--bg);
-  padding-top: 10px;
 }
+.group-toggle:hover { color: var(--accent); }
+.group-toggle-arrow { display: inline-block; width: 14px; }
 /* align-items: stretch (not flex-start) so every button in the stack
    matches the width of the widest one, instead of each hugging its own
    label and leaving a ragged right edge. */
@@ -352,7 +361,8 @@ main > .section-heading:first-child { margin-top: 0; }
     color: var(--muted);
   }
   .breakdown-table td.breakdown-row-actions { display: flex; padding-top: 6px; }
-  .breakdown-table-group td { border-radius: 8px; margin: 10px 0 4px; padding: 8px; }
+  .breakdown-table-group td { border-radius: 8px; margin: 10px 0 4px; }
+  .breakdown-table-group .group-toggle { padding: 10px 8px; }
 }
 
 .stage-links { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }

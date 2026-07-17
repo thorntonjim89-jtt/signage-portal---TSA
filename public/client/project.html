@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Project Detail</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/css/style.css">
@@ -70,6 +71,19 @@
   let stageNotes = [];
   let allPhotos = [];
   let designPacks = [];
+  // Which sign-type groups are currently expanded — persisted across
+  // re-renders (see the matching comment in team/project.html) so
+  // collapsing/expanding never resets on its own.
+  let installedCompleteExpandedTags = new Set();
+  let stageItemExpandedTags = new Map();
+  function getStageExpandedTags(stageNumber) {
+    if (!stageItemExpandedTags.has(stageNumber)) stageItemExpandedTags.set(stageNumber, new Set());
+    return stageItemExpandedTags.get(stageNumber);
+  }
+  // Which stage's Details panel is open, if any — group-toggle clicks now
+  // re-render #timeline locally (see renderProjectTimeline), so this needs
+  // the same persistence team/project.html uses.
+  let expandedStageDetail = null;
 
   // Photos are installation-site evidence, so only surface them under the
   // stages that are actually about physical install/QC/shipping work — they
@@ -128,26 +142,6 @@
     });
   }
 
-  // A single "12 of 28 scheduled items complete" total doesn't say what's
-  // actually left — break it down by sign type (the "CODE — ..." prefix)
-  // so each category's progress is visible at a glance.
-  function scheduledWorkBreakdown() {
-    if (!scheduledWorkItems.length) return null;
-    const groups = new Map();
-    scheduledWorkItems.forEach((i) => {
-      const { tag } = splitSignType(i.description);
-      const key = tag || 'Other';
-      if (!groups.has(key)) groups.set(key, { total: 0, complete: 0 });
-      const g = groups.get(key);
-      // Counted in sign units (quantity), not tracker rows — one row can
-      // cover many physical signs (e.g. "12 pocket signs on Level 26") and
-      // may only be partially installed so far.
-      g.total += i.quantity || 1;
-      g.complete += i.completed_quantity || 0;
-    });
-    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }
-
   // Read-only counterpart to team's editable version — same running log of
   // dated notes per stage, no add form or delete control.
   function renderStageNotes(stageNumber) {
@@ -170,8 +164,14 @@
       <h2>${escapeHtml(project.title)}</h2>
       <p><strong>Price:</strong> ${fmtMoney(project.client_price)}</p>
     `;
+    renderProjectTimeline();
+  }
+
+  // Separated from loadProject so a group-toggle click (pure UI state, no
+  // new data) can re-render locally instead of re-fetching over the network.
+  function renderProjectTimeline() {
     document.getElementById('timeline').innerHTML = stages.map((s) => {
-      const breakdown = s.name === 'Installed & Complete' ? scheduledWorkBreakdown() : null;
+      const isInstalledComplete = s.name === 'Installed & Complete';
       return `
       <li class="${s.status}">
         <div class="timeline-row">
@@ -180,20 +180,33 @@
             <strong>${escapeHtml(s.name)}</strong>
             <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
             ${renderStageNotes(s.stage_number)}
-            ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button><div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>` : ''}
+            ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ${expandedStageDetail === s.stage_number ? '▴' : '▾'}</button><div class="stage-detail${expandedStageDetail === s.stage_number ? '' : ' hidden'}" id="stage-detail-${s.stage_number}"></div>` : ''}
           </div>
           <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
         </div>
-        ${breakdown ? renderBreakdownTable(breakdown) : ''}
+        ${isInstalledComplete ? `<div id="installed-complete-table">${renderGroupedItemsTable(scheduledWorkItems, installedCompleteExpandedTags)}</div>` : ''}
       </li>`;
     }).join('');
+
+    if (expandedStageDetail) {
+      const detailEl = document.getElementById('stage-detail-' + expandedStageDetail);
+      if (detailEl) renderStageDetail(expandedStageDetail, detailEl);
+    }
+
+    const installedCompleteTable = document.getElementById('installed-complete-table');
+    if (installedCompleteTable) wireGroupToggles(installedCompleteTable, installedCompleteExpandedTags, renderProjectTimeline);
 
     document.querySelectorAll('.stage-detail-toggle').forEach((btn) => {
       btn.addEventListener('click', () => {
         const stageNumber = Number(btn.dataset.stage);
         const detailEl = document.getElementById('stage-detail-' + stageNumber);
         const isHidden = detailEl.classList.contains('hidden');
-        if (isHidden) renderStageDetail(stageNumber, detailEl);
+        if (isHidden) {
+          renderStageDetail(stageNumber, detailEl);
+          expandedStageDetail = stageNumber;
+        } else {
+          expandedStageDetail = null;
+        }
         detailEl.classList.toggle('hidden', !isHidden);
         btn.textContent = isHidden ? 'Details ▴' : 'Details ▾';
       });
@@ -208,7 +221,10 @@
     // could disagree with the breakdown and show a different set entirely.
     const itemsHtml = stage.name === 'Installed & Complete'
       ? ''
-      : renderItemsTable(scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage));
+      : renderGroupedItemsTable(
+          scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage),
+          getStageExpandedTags(stageNumber)
+        );
 
     let photoHtml = '';
     if (INSTALLATION_STAGES.includes(stage.name)) {
@@ -238,6 +254,7 @@
       ? `${designPackHtml}${photoHtml}${itemsHtml}`
       : '<p class="muted" style="margin:10px 0 0;">Nothing logged during this stage yet.</p>';
     wireFileLinks(el);
+    wireGroupToggles(el, getStageExpandedTags(stageNumber), () => renderStageDetail(stageNumber, el));
   }
 
   function renderScheduledItemRow(i) {
@@ -253,27 +270,35 @@
       </tr>`;
   }
 
-  // Plain, ungrouped item table — used for a single stage's Details panel,
-  // where items aren't naturally grouped by sign type the way the
-  // Installed & Complete breakdown is.
-  function renderItemsTable(items) {
+  // Groups items by sign type with a collapsible header per group — see
+  // the matching comment in team/project.html for why (Installed & Complete
+  // shows literally every item in the project, so leaving every group
+  // expanded turns it into a wall of rows). Read-only: no action buttons,
+  // just the toggle.
+  function renderGroupedItemsTable(items, expandedTags) {
     if (!items.length) return '';
-    return `
-      <div class="breakdown-table-wrap">
-        <table class="breakdown-table">
-          <thead><tr><th>Item</th><th>Done</th><th>Status</th></tr></thead>
-          <tbody>${items.map(renderScheduledItemRow).join('')}</tbody>
-        </table>
-      </div>`;
-  }
-
-  // Always renders every item, grouped by sign type, instead of requiring a
-  // click per sign type to see anything.
-  function renderBreakdownTable(breakdown) {
-    const rows = breakdown.map(([tag, g]) => {
-      const items = scheduledWorkItems.filter((i) => (splitSignType(i.description).tag || 'Other') === tag);
-      const groupRow = `<tr class="breakdown-table-group"><td colspan="3">${escapeHtml(tag)} <span class="muted">&middot; ${g.complete}/${g.total} complete</span></td></tr>`;
-      return groupRow + items.map(renderScheduledItemRow).join('');
+    const groups = new Map();
+    items.forEach((i) => {
+      const tag = splitSignType(i.description).tag || 'Other';
+      if (!groups.has(tag)) groups.set(tag, []);
+      groups.get(tag).push(i);
+    });
+    const rows = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b)).map((tag) => {
+      const groupItems = groups.get(tag);
+      const total = groupItems.reduce((sum, i) => sum + (i.quantity || 1), 0);
+      const complete = groupItems.reduce((sum, i) => sum + (i.completed_quantity || 0), 0);
+      const isOpen = expandedTags.has(tag);
+      const headerRow = `
+        <tr class="breakdown-table-group">
+          <td colspan="3">
+            <button type="button" class="group-toggle" data-toggle-group="${escapeHtml(tag)}">
+              <span class="group-toggle-arrow">${isOpen ? '▾' : '▸'}</span>
+              ${escapeHtml(tag)}
+              <span class="muted">&middot; ${groupItems.length} item${groupItems.length === 1 ? '' : 's'} &middot; ${complete}/${total} complete</span>
+            </button>
+          </td>
+        </tr>`;
+      return headerRow + (isOpen ? groupItems.map(renderScheduledItemRow).join('') : '');
     }).join('');
     return `
       <div class="breakdown-table-wrap">
@@ -282,6 +307,16 @@
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+  }
+
+  function wireGroupToggles(el, expandedTags, rerender) {
+    el.querySelectorAll('button[data-toggle-group]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tag = btn.dataset.toggleGroup;
+        if (expandedTags.has(tag)) expandedTags.delete(tag); else expandedTags.add(tag);
+        rerender();
+      });
+    });
   }
 
   async function loadPhotos() {
