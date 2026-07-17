@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Project Detail — Team</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <link rel="stylesheet" href="/css/style.css">
@@ -98,6 +99,18 @@
   // breakdown table), so without tracking this, editing an item from inside
   // an open Details panel would silently collapse it back to empty.
   let expandedStageDetail = null;
+  // Which sign-type groups are currently expanded, per table — Installed &
+  // Complete's own table, and one Set per other stage (keyed by stage
+  // number) since the same tag could plausibly appear under more than one
+  // stage's Details and shouldn't share expand state. Persisted the same
+  // way as expandedStageDetail, for the same reason: a re-render must not
+  // silently collapse something the user just opened.
+  let installedCompleteExpandedTags = new Set();
+  let stageItemExpandedTags = new Map();
+  function getStageExpandedTags(stageNumber) {
+    if (!stageItemExpandedTags.has(stageNumber)) stageItemExpandedTags.set(stageNumber, new Set());
+    return stageItemExpandedTags.get(stageNumber);
+  }
   let allPhotos = [];
   let designPacks = [];
 
@@ -198,26 +211,6 @@
     select.value = currentSupplierId || '';
   }
 
-  // A single "12 of 28 scheduled items complete" total doesn't say what's
-  // actually left — break it down by sign type (the "CODE — ..." prefix)
-  // so each category's progress is visible at a glance.
-  function scheduledWorkBreakdown() {
-    if (!scheduledWorkItems.length) return null;
-    const groups = new Map();
-    scheduledWorkItems.forEach((i) => {
-      const { tag } = splitSignType(i.description);
-      const key = tag || 'Other';
-      if (!groups.has(key)) groups.set(key, { total: 0, complete: 0 });
-      const g = groups.get(key);
-      // Counted in sign units (quantity), not tracker rows — one row can
-      // cover many physical signs (e.g. "12 pocket signs on Level 26") and
-      // may only be partially installed so far.
-      g.total += i.quantity || 1;
-      g.complete += i.completed_quantity || 0;
-    });
-    return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
-  }
-
   // <input type="date"> needs a plain YYYY-MM-DD value, not a locale string.
   function toDateInputValue(value) {
     if (!value) return '';
@@ -250,7 +243,7 @@
 
   function renderTimeline() {
     document.getElementById('timeline').innerHTML = stages.map((s) => {
-      const breakdown = s.name === 'Installed & Complete' ? scheduledWorkBreakdown() : null;
+      const isInstalledComplete = s.name === 'Installed & Complete';
       return `
       <li class="${s.status}">
         <div class="timeline-row">
@@ -261,11 +254,11 @@
             ${renderStageNotes(s.stage_number)}
             <div class="stage-links">
               ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ${expandedStageDetail === s.stage_number ? '▴' : '▾'}</button>` : ''}
-              <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">${breakdown ? 'Edit Stage Dates (all items)' : 'Edit Dates'}</button>
+              <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">${isInstalledComplete ? 'Edit Stage Dates (all items)' : 'Edit Dates'}</button>
             </div>
             <div class="stage-detail${expandedStageDetail === s.stage_number ? '' : ' hidden'}" id="stage-detail-${s.stage_number}"></div>
             <div class="stage-dates-form hidden" id="stage-dates-${s.stage_number}">
-              ${breakdown ? '<p class="muted" style="margin:0 0 8px;">This sets the stage\'s own overall dates, not any individual item\'s — edit a specific item directly in the table below.</p>' : ''}
+              ${isInstalledComplete ? '<p class="muted" style="margin:0 0 8px;">This sets the stage\'s own overall dates, not any individual item\'s — edit a specific item directly in the table below.</p>' : ''}
               <form data-dates-stage="${s.stage_number}">
                 <label>Started<input type="date" name="startedAt" value="${toDateInputValue(s.started_at)}"></label>
                 <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(s.completed_at)}"></label>
@@ -281,7 +274,7 @@
             ${s.status !== 'complete' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="complete">Complete</button>` : ''}
           </div>
         </div>
-        ${breakdown ? `<div id="installed-complete-table">${renderBreakdownTable(breakdown)}</div>` : ''}
+        ${isInstalledComplete ? `<div id="installed-complete-table">${renderGroupedItemsTable(scheduledWorkItems, installedCompleteExpandedTags)}</div>` : ''}
       </li>`;
     }).join('');
 
@@ -369,7 +362,10 @@
     // panel's own copy and make its data-work-dates-target lookups
     // ambiguous between the two occurrences.
     const installedCompleteTable = document.getElementById('installed-complete-table');
-    if (installedCompleteTable) wireScheduledItemEvents(installedCompleteTable);
+    if (installedCompleteTable) {
+      wireScheduledItemEvents(installedCompleteTable);
+      wireGroupToggles(installedCompleteTable, installedCompleteExpandedTags, renderTimeline);
+    }
 
     document.querySelectorAll('form[data-dates-stage]').forEach((form) => {
       form.addEventListener('submit', async (e) => {
@@ -408,7 +404,10 @@
     // whichever items fall in its date range.
     const itemsHtml = stage.name === 'Installed & Complete'
       ? ''
-      : renderItemsTable(scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage));
+      : renderGroupedItemsTable(
+          scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage),
+          getStageExpandedTags(stageNumber)
+        );
 
     let photoHtml = '';
     if (INSTALLATION_STAGES.includes(stage.name)) {
@@ -452,6 +451,10 @@
     // same item can also be sitting in the Installed & Complete table
     // elsewhere in #timeline at the same time.
     wireScheduledItemEvents(el);
+    // Local re-render (not the whole renderTimeline) — toggling a group is
+    // pure UI state, not a data change, and this panel doesn't depend on
+    // anything else on the page.
+    wireGroupToggles(el, getStageExpandedTags(stageNumber), () => renderStageDetail(stageNumber, el));
 
     el.querySelectorAll('button[data-delete-pack]').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -708,29 +711,37 @@
       </tr>`;
   }
 
-  // Plain, ungrouped item table — used for a single stage's Details panel,
-  // where items aren't naturally grouped by sign type the way the
-  // Installed & Complete breakdown is.
-  function renderItemsTable(items) {
+  // Groups items by sign type with a collapsible header per group, instead
+  // of always showing every row — a project with a lot of scheduled work
+  // (Installed & Complete shows literally everything) turns into a wall of
+  // rows otherwise. Expand state is owned by the caller and persisted
+  // across re-renders (see installedCompleteExpandedTags /
+  // stageItemExpandedTags), so collapsing/expanding — or editing an item
+  // inside an expanded group — never resets what's currently open.
+  function renderGroupedItemsTable(items, expandedTags) {
     if (!items.length) return '';
-    return `
-      <div class="breakdown-table-wrap">
-        <table class="breakdown-table">
-          <thead><tr><th>Item</th><th>Done</th><th>Scheduled</th><th>Status</th><th></th></tr></thead>
-          <tbody>${items.map(renderScheduledItemRow).join('')}</tbody>
-        </table>
-      </div>`;
-  }
-
-  // Always renders every item, grouped by sign type — replaces an earlier
-  // click-to-expand-each-tag design that made scanning progress tedious and,
-  // worse, lost its expanded state (so edits didn't visibly update) every
-  // time the timeline re-rendered after a change.
-  function renderBreakdownTable(breakdown) {
-    const rows = breakdown.map(([tag, g]) => {
-      const items = scheduledWorkItems.filter((i) => (splitSignType(i.description).tag || 'Other') === tag);
-      const groupRow = `<tr class="breakdown-table-group"><td colspan="5">${escapeHtml(tag)} <span class="muted">&middot; ${g.complete}/${g.total} complete</span></td></tr>`;
-      return groupRow + items.map(renderScheduledItemRow).join('');
+    const groups = new Map();
+    items.forEach((i) => {
+      const tag = splitSignType(i.description).tag || 'Other';
+      if (!groups.has(tag)) groups.set(tag, []);
+      groups.get(tag).push(i);
+    });
+    const rows = Array.from(groups.keys()).sort((a, b) => a.localeCompare(b)).map((tag) => {
+      const groupItems = groups.get(tag);
+      const total = groupItems.reduce((sum, i) => sum + (i.quantity || 1), 0);
+      const complete = groupItems.reduce((sum, i) => sum + (i.completed_quantity || 0), 0);
+      const isOpen = expandedTags.has(tag);
+      const headerRow = `
+        <tr class="breakdown-table-group">
+          <td colspan="5">
+            <button type="button" class="group-toggle" data-toggle-group="${escapeHtml(tag)}">
+              <span class="group-toggle-arrow">${isOpen ? '▾' : '▸'}</span>
+              ${escapeHtml(tag)}
+              <span class="muted">&middot; ${groupItems.length} item${groupItems.length === 1 ? '' : 's'} &middot; ${complete}/${total} complete</span>
+            </button>
+          </td>
+        </tr>`;
+      return headerRow + (isOpen ? groupItems.map(renderScheduledItemRow).join('') : '');
     }).join('');
     return `
       <div class="breakdown-table-wrap">
@@ -739,6 +750,20 @@
           <tbody>${rows}</tbody>
         </table>
       </div>`;
+  }
+
+  // Wires each group's collapse/expand toggle — separate from
+  // wireScheduledItemEvents since this is pure UI state (no API call), so
+  // it re-renders locally via the caller-supplied rerender rather than
+  // going through a full data reload.
+  function wireGroupToggles(el, expandedTags, rerender) {
+    el.querySelectorAll('button[data-toggle-group]').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        const tag = btn.dataset.toggleGroup;
+        if (expandedTags.has(tag)) expandedTags.delete(tag); else expandedTags.add(tag);
+        rerender();
+      });
+    });
   }
 
   // Shared between the Scheduled Work tab's list and the Timeline's
