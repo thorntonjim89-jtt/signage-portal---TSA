@@ -424,6 +424,12 @@ main > .section-heading:first-child { margin-top: 0; }
 .stage-note-form input[type="text"] { flex: 1 1 200px; margin-top: 0; }
 .stage-note-form .btn { flex: 0 0 auto; min-width: 0; padding: 9px 16px; }
 
+.add-item-form { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
+.add-item-form input[type="text"] { flex: 1 1 220px; margin-top: 0; }
+.add-item-form input[type="number"] { flex: 0 0 80px; margin-top: 0; }
+.add-item-form input[type="date"] { flex: 0 0 150px; margin-top: 0; }
+.add-item-form .btn { flex: 0 0 auto; min-width: 0; padding: 9px 16px; }
+
 .breakdown-group:not(.hidden) {
   margin: 10px 0;
   padding: 12px 14px;

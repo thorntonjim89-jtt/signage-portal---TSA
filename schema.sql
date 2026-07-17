@@ -184,6 +184,13 @@ CREATE TABLE IF NOT EXISTS scheduled_work (
   scheduled_date DATE NOT NULL,
   status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'complete')),
   completed_at TIMESTAMPTZ,
+  -- Which program stage this item belongs to, set explicitly at creation
+  -- time (or later reassigned via the edit form). Nullable only because
+  -- rows created before this column existed have no value — the frontend
+  -- falls back to inferring a stage from scheduled_date for those. Every
+  -- new item gets an explicit value, so that fallback only ever applies to
+  -- pre-migration rows.
+  stage_number INTEGER CHECK (stage_number BETWEEN 1 AND 7),
   created_by INTEGER NOT NULL REFERENCES users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

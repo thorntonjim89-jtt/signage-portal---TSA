@@ -34,13 +34,7 @@
     </div>
 
     <div class="tab-panel hidden" data-panel="scheduled-work">
-      <form id="scheduled-work-form">
-        <label>Description<input type="text" name="description" required placeholder="e.g. Ceiling signage install — Levels 23-28"></label>
-        <label>Quantity<input type="number" name="quantity" min="1" value="1" required></label>
-        <label>Scheduled date<input type="date" name="scheduledDate" required></label>
-        <div class="actions"><button class="btn secondary" type="submit">Add Scheduled Work</button></div>
-        <div class="error hidden" id="scheduled-work-error"></div>
-      </form>
+      <p class="muted" style="margin-top:0;">To add a new item, open the relevant stage's <strong>Details</strong> panel in Program above — that's where new items get tagged to a stage.</p>
       <div class="breakdown-group" style="margin-top:16px;">
         <div class="breakdown-group-header">Backfill quantities from tracker</div>
         <p class="muted" style="margin-top:0;">
@@ -133,6 +127,16 @@
       if (startT <= t && (!match || startT > new Date(match.started_at).getTime())) match = s;
     }
     return match;
+  }
+
+  // scheduled_work items now carry an explicit stage_number, set at creation
+  // (from whichever stage's "Add Item" form was used) and updatable via the
+  // edit form's Stage field — stageForDate above is only a fallback display
+  // for rows created before that column existed.
+  function stageNumberFor(item, stageList) {
+    if (item.stage_number != null) return item.stage_number;
+    const s = stageForDate(item.scheduled_date, stageList);
+    return s ? s.stage_number : null;
   }
 
   async function loadDesignPacks() {
@@ -253,7 +257,7 @@
             <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
             ${renderStageNotes(s.stage_number)}
             <div class="stage-links">
-              ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ${expandedStageDetail === s.stage_number ? '▴' : '▾'}</button>` : ''}
+              <button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ${expandedStageDetail === s.stage_number ? '▴' : '▾'}</button>
               <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">${isInstalledComplete ? 'Edit Stage Dates (all items)' : 'Edit Dates'}</button>
             </div>
             <div class="stage-detail${expandedStageDetail === s.stage_number ? '' : ' hidden'}" id="stage-detail-${s.stage_number}"></div>
@@ -274,7 +278,7 @@
             ${s.status !== 'complete' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="complete">Complete</button>` : ''}
           </div>
         </div>
-        ${isInstalledComplete ? `<div id="installed-complete-table">${renderGroupedItemsTable(scheduledWorkItems, installedCompleteExpandedTags)}</div>` : ''}
+        ${isInstalledComplete ? `<div id="installed-complete-table">${renderGroupedItemsTable(scheduledWorkItems, installedCompleteExpandedTags)}</div><div id="installed-complete-add-item">${renderAddItemForm(s.stage_number)}</div>` : ''}
       </li>`;
     }).join('');
 
@@ -366,6 +370,11 @@
       wireScheduledItemEvents(installedCompleteTable);
       wireGroupToggles(installedCompleteTable, installedCompleteExpandedTags, renderTimeline);
     }
+    const installedCompleteAddItem = document.getElementById('installed-complete-add-item');
+    if (installedCompleteAddItem) {
+      const installedCompleteStage = stages.find((st) => st.name === 'Installed & Complete');
+      wireAddItemForm(installedCompleteAddItem, installedCompleteStage.stage_number, renderTimeline);
+    }
 
     document.querySelectorAll('form[data-dates-stage]').forEach((form) => {
       form.addEventListener('submit', async (e) => {
@@ -395,19 +404,18 @@
 
   function renderStageDetail(stageNumber, el) {
     const stage = stages.find((s) => s.stage_number === stageNumber);
-    // Installed & Complete already has its own authoritative item list (the
-    // sign-type breakdown, grouped by tag, showing every item regardless of
-    // date) — repeating it here too, filtered by a *guess* at which stage
-    // was active on the item's date, could disagree with that and show a
-    // different set entirely, so this stage's Details only covers photos.
-    // Every other stage uses the same editable table, just scoped to
-    // whichever items fall in its date range.
+    // Installed & Complete already has its own authoritative item list and
+    // its own Add Item form (the always-visible sign-type breakdown right
+    // under the stage row, showing every item regardless of stage) — this
+    // stage's Details only covers photos. Every other stage uses the same
+    // editable table plus its own Add Item form, scoped to whichever items
+    // are explicitly tagged to it.
     const itemsHtml = stage.name === 'Installed & Complete'
       ? ''
       : renderGroupedItemsTable(
-          scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage),
+          scheduledWorkItems.filter((i) => stageNumberFor(i, stages) === stageNumber),
           getStageExpandedTags(stageNumber)
-        );
+        ) + renderAddItemForm(stageNumber);
 
     let photoHtml = '';
     if (INSTALLATION_STAGES.includes(stage.name)) {
@@ -455,6 +463,7 @@
     // pure UI state, not a data change, and this panel doesn't depend on
     // anything else on the page.
     wireGroupToggles(el, getStageExpandedTags(stageNumber), () => renderStageDetail(stageNumber, el));
+    wireAddItemForm(el, stageNumber, () => renderStageDetail(stageNumber, el));
 
     el.querySelectorAll('button[data-delete-pack]').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -655,9 +664,11 @@
   // Shared by the card view (Scheduled Work tab) and the table view
   // (Timeline breakdown) so the two surfaces edit the exact same fields.
   function renderEditItemForm(i) {
+    const currentStage = stageNumberFor(i, stages);
     return `
       <form data-work-dates-id="${i.id}">
         <label>Description<input type="text" name="description" value="${escapeHtml(i.description)}" required></label>
+        <label>Stage<select name="stageNumber">${stages.map((s) => `<option value="${s.stage_number}" ${s.stage_number === currentStage ? 'selected' : ''}>${s.stage_number}. ${escapeHtml(s.name)}</option>`).join('')}</select></label>
         <label>Quantity<input type="number" name="quantity" min="1" value="${i.quantity}" required></label>
         <label>Completed quantity<input type="number" name="completedQuantity" min="0" max="${i.quantity}" value="${i.completed_quantity}" required></label>
         <label>Notes<textarea name="notes" rows="2" placeholder="Optional — blockers, partial progress, anything worth flagging">${escapeHtml(i.notes || '')}</textarea></label>
@@ -668,14 +679,62 @@
       </form>`;
   }
 
+  // Lets team add a new item directly from the stage they're looking at,
+  // instead of jumping to the separate Scheduled Work tab and having the
+  // stage guessed from a date — the stage is implicit here (whichever
+  // panel this form is rendered inside), so every new item gets an
+  // unambiguous stage_number from the moment it's created.
+  function renderAddItemForm(stageNumber) {
+    return `
+      <div class="breakdown-group" style="margin-top:12px;">
+        <div class="breakdown-group-header">Add Item</div>
+        <form class="add-item-form" data-add-item-stage="${stageNumber}">
+          <input type="text" name="description" placeholder="e.g. Ceiling signage install — Levels 23-28" required>
+          <input type="number" name="quantity" min="1" value="1" required>
+          <input type="date" name="scheduledDate" required>
+          <button class="btn secondary" type="submit">Add</button>
+          <div class="error hidden" style="flex-basis:100%;"></div>
+        </form>
+      </div>`;
+  }
+
+  function wireAddItemForm(el, stageNumber, onSuccess) {
+    const form = el.querySelector('form.add-item-form');
+    if (!form) return;
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(form);
+      const errorEl = form.querySelector('.error');
+      errorEl.classList.add('hidden');
+      try {
+        await api('/scheduled-work', {
+          method: 'POST',
+          body: {
+            projectId,
+            stageNumber,
+            description: fd.get('description'),
+            quantity: Number(fd.get('quantity')) || 1,
+            scheduledDate: fd.get('scheduledDate'),
+          },
+        });
+        await loadScheduledWork();
+        onSuccess();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove('hidden');
+      }
+    });
+  }
+
   function renderScheduledItem(i) {
     const { tag, title } = splitSignType(i.description);
+    const stage = stages.find((s) => s.stage_number === stageNumberFor(i, stages));
     return `
       <div class="list-item issue-item">
         <div class="issue-item-header">
           <div>
             <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}</div>
-            <div class="meta">${i.completed_quantity}/${i.quantity} installed &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+            <div class="meta">${stage ? escapeHtml(stage.name) + ' &middot; ' : ''}${i.completed_quantity}/${i.quantity} installed &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
             ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
             <button type="button" class="work-dates-toggle" data-work-dates="${i.id}">Edit Item</button>
           </div>
@@ -830,6 +889,7 @@
             body: {
               action: 'edit',
               description: fd.get('description'),
+              stageNumber: Number(fd.get('stageNumber')),
               quantity: Number(fd.get('quantity')) || 1,
               completedQuantity: Number(fd.get('completedQuantity')) || 0,
               notes: fd.get('notes') || null,
@@ -879,30 +939,6 @@
     scheduledWorkItems = items;
     renderScheduledWorkList();
   }
-
-  document.getElementById('scheduled-work-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const form = new FormData(e.target);
-    const errorEl = document.getElementById('scheduled-work-error');
-    errorEl.classList.add('hidden');
-    try {
-      await api('/scheduled-work', {
-        method: 'POST',
-        body: {
-          projectId,
-          description: form.get('description'),
-          quantity: Number(form.get('quantity')) || 1,
-          scheduledDate: form.get('scheduledDate'),
-        },
-      });
-      e.target.reset();
-      await loadScheduledWork();
-      renderTimeline();
-    } catch (err) {
-      errorEl.textContent = err.message;
-      errorEl.classList.remove('hidden');
-    }
-  });
 
   function renderBackfillResult(plan) {
     const el = document.getElementById('backfill-result');

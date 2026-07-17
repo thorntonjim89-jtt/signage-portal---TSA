@@ -1,7 +1,12 @@
 const { query } = require('./utils/db');
 const { getUserFromEvent, json, getIdFromPath, withErrorHandling } = require('./utils/auth');
 
-const COLUMNS = 'id, project_id, description, quantity, completed_quantity, notes, scheduled_date, status, completed_at, created_at';
+const COLUMNS = 'id, project_id, description, quantity, completed_quantity, notes, scheduled_date, status, completed_at, stage_number, created_at';
+
+function parseStageNumber(value) {
+  const n = Number(value);
+  return Number.isInteger(n) && n >= 1 && n <= 7 ? n : null;
+}
 
 // Only client and team see scheduled work — a supplier's own project view
 // only ever deals with manufacturing defects, not the client's install
@@ -68,15 +73,17 @@ async function createScheduledWork(user, event) {
   }
   const quantity = data.quantity === undefined ? 1 : parseQuantity(data.quantity);
   if (quantity === null) return json(400, { error: 'quantity must be a whole number of 1 or more' });
+  const stageNumber = parseStageNumber(data.stageNumber);
+  if (stageNumber === null) return json(400, { error: 'stageNumber must be a whole number between 1 and 7' });
 
   const project = await assertProjectAccess(user, projectId);
   if (!project) return json(403, { error: 'Forbidden' });
 
   const result = await query(
-    `INSERT INTO scheduled_work (project_id, description, quantity, scheduled_date, created_by)
-     VALUES ($1, $2, $3, $4, $5)
+    `INSERT INTO scheduled_work (project_id, description, quantity, scheduled_date, stage_number, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING ${COLUMNS}`,
-    [projectId, description.trim(), quantity, scheduledDate, user.id]
+    [projectId, description.trim(), quantity, scheduledDate, stageNumber, user.id]
   );
   return json(201, { item: result.rows[0] });
 }
@@ -101,6 +108,8 @@ async function updateScheduledWork(user, id, data) {
     if (!scheduledDate || Number.isNaN(new Date(scheduledDate).getTime())) {
       return json(400, { error: 'scheduledDate must be a valid date' });
     }
+    const stageNumber = parseStageNumber(data.stageNumber);
+    if (stageNumber === null) return json(400, { error: 'stageNumber must be a whole number between 1 and 7' });
     const status = statusFor(completedQuantity, quantity);
     let completed = null;
     if (status === 'complete') {
@@ -110,10 +119,10 @@ async function updateScheduledWork(user, id, data) {
     const result = await query(
       `UPDATE scheduled_work
        SET description = $1, quantity = $2, completed_quantity = $3, notes = $4,
-           scheduled_date = $5, completed_at = $6, status = $7
-       WHERE id = $8
+           scheduled_date = $5, completed_at = $6, status = $7, stage_number = $8
+       WHERE id = $9
        RETURNING ${COLUMNS}`,
-      [description.trim(), quantity, completedQuantity, notes ? notes.trim() : null, scheduledDate, completed, status, id]
+      [description.trim(), quantity, completedQuantity, notes ? notes.trim() : null, scheduledDate, completed, status, stageNumber, id]
     );
     if (!result.rows.length) return json(404, { error: 'Scheduled work item not found' });
     return json(200, { item: result.rows[0] });
