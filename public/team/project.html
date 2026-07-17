@@ -40,6 +40,16 @@
         <div class="actions"><button class="btn secondary" type="submit">Add Scheduled Work</button></div>
         <div class="error hidden" id="scheduled-work-error"></div>
       </form>
+      <div class="breakdown-group" style="margin-top:16px;">
+        <div class="breakdown-group-header">Backfill quantities from tracker</div>
+        <p class="muted" style="margin-top:0;">
+          Matches item descriptions against the client's Manufacturing &amp; Installation Tracker and corrects
+          quantities to the confirmed counts. Anything it can't confidently match (variations, extras your team
+          added, ambiguous duplicates) is left untouched.
+        </p>
+        <button class="btn secondary" type="button" id="backfill-preview-btn">Preview changes</button>
+        <div id="backfill-result" style="margin-top:12px;"></div>
+      </div>
       <div class="tab-bar" id="scheduled-work-subtabs" style="margin-top:16px;">
         <button class="tab-btn active" data-subtab="upcoming">Upcoming</button>
         <button class="tab-btn" data-subtab="completed">Completed</button>
@@ -188,10 +198,10 @@
       if (!groups.has(key)) groups.set(key, { total: 0, complete: 0 });
       const g = groups.get(key);
       // Counted in sign units (quantity), not tracker rows — one row can
-      // cover many physical signs (e.g. "12 pocket signs on Level 26").
-      const qty = i.quantity || 1;
-      g.total += qty;
-      if (i.status === 'complete') g.complete += qty;
+      // cover many physical signs (e.g. "12 pocket signs on Level 26") and
+      // may only be partially installed so far.
+      g.total += i.quantity || 1;
+      g.complete += i.completed_quantity || 0;
     });
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }
@@ -211,20 +221,14 @@
         <div class="timeline-info">
           <strong>${escapeHtml(s.name)}</strong>
           <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
-          ${breakdown ? `
-            <p class="muted breakdown-hint">Tap a sign type below to edit its items' dates individually:</p>
-            <div class="scheduled-breakdown">
-              ${breakdown.map(([tag, g]) => `<button type="button" class="breakdown-chip ${g.complete === g.total ? 'complete' : ''}" data-breakdown-tag="${escapeHtml(tag)}">${escapeHtml(tag)} ${g.complete}/${g.total}</button>`).join('')}
-            </div>
-            ${breakdown.map(([tag]) => `<div class="breakdown-group hidden" id="breakdown-group-${escapeHtml(tag)}"></div>`).join('')}
-          ` : ''}
+          ${breakdown ? renderBreakdownTable(breakdown) : ''}
           <div class="stage-links">
             ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button>` : ''}
             <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">${breakdown ? 'Edit Stage Dates (all items)' : 'Edit Dates'}</button>
           </div>
           <div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>
           <div class="stage-dates-form hidden" id="stage-dates-${s.stage_number}">
-            ${breakdown ? '<p class="muted" style="margin:0 0 8px;">This sets the stage\'s own overall dates, not any individual item\'s — tap a sign-type chip above to edit a specific item.</p>' : ''}
+            ${breakdown ? '<p class="muted" style="margin:0 0 8px;">This sets the stage\'s own overall dates, not any individual item\'s — edit a specific item directly in the table above.</p>' : ''}
             <form data-dates-stage="${s.stage_number}">
               <label>Started<input type="date" name="startedAt" value="${toDateInputValue(s.started_at)}"></label>
               <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(s.completed_at)}"></label>
@@ -242,7 +246,12 @@
       </li>`;
     }).join('');
 
-    document.querySelectorAll('#timeline button[data-status]').forEach((btn) => {
+    // Stage Start/Complete buttons (data-stage) and per-item Mark
+    // Complete/Reopen buttons (data-id, wired below via
+    // wireScheduledItemEvents) both use data-status and now share the
+    // #timeline container — scope this to data-stage specifically so it
+    // doesn't also catch item buttons and PATCH the wrong endpoint.
+    document.querySelectorAll('#timeline button[data-status][data-stage]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         await api('/projects/' + projectId, {
           method: 'PATCH',
@@ -269,23 +278,12 @@
       });
     });
 
-    document.querySelectorAll('button[data-breakdown-tag]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const tag = btn.dataset.breakdownTag;
-        const groupEl = document.getElementById('breakdown-group-' + tag);
-        const isHidden = groupEl.classList.contains('hidden');
-        if (isHidden) {
-          const items = scheduledWorkItems.filter((i) => (splitSignType(i.description).tag || 'Other') === tag);
-          const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
-          const completeQty = items.filter((i) => i.status === 'complete').reduce((sum, i) => sum + (i.quantity || 1), 0);
-          groupEl.innerHTML = `
-            <div class="breakdown-group-header">${escapeHtml(tag)} <span class="muted">&middot; ${completeQty}/${totalQty} complete</span></div>
-            ${items.map(renderScheduledItem).join('')}`;
-          wireScheduledItemEvents(groupEl);
-        }
-        groupEl.classList.toggle('hidden', !isHidden);
-      });
-    });
+    // Wires Mark Complete/Reopen, Delete, and Edit Item for every row in
+    // every stage's breakdown table in one pass — since the whole timeline
+    // (including the table) is rebuilt fresh on every change, there's no
+    // separate expand-and-repopulate step, so an edit is reflected
+    // immediately instead of needing another click to see it.
+    wireScheduledItemEvents(document.getElementById('timeline'));
 
     document.querySelectorAll('form[data-dates-stage]').forEach((form) => {
       form.addEventListener('submit', async (e) => {
@@ -315,8 +313,14 @@
 
   function renderStageDetail(stageNumber, el) {
     const stage = stages.find((s) => s.stage_number === stageNumber);
-    const items = scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage);
-    const itemsHtml = items.map(renderScheduledItemReadOnly).join('');
+    // Installed & Complete already has its own authoritative item list (the
+    // sign-type breakdown chips, grouped by tag). Repeating items here too —
+    // filtered by a *guess* at which stage was active on the item's date —
+    // could disagree with the breakdown and show a different set entirely,
+    // so this stage's Details only covers photos.
+    const itemsHtml = stage.name === 'Installed & Complete'
+      ? ''
+      : scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage).map(renderScheduledItemReadOnly).join('');
 
     let photoHtml = '';
     if (INSTALLATION_STAGES.includes(stage.name)) {
@@ -401,9 +405,10 @@
       <div class="list-item">
         <div>
           <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}</div>
-          <div class="meta">Qty ${i.quantity} &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+          <div class="meta">${i.completed_quantity}/${i.quantity} installed &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+          ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
         </div>
-        <span class="badge ${i.status}">${i.status}</span>
+        <span class="badge ${i.status}">${i.status.replace('_', ' ')}</span>
       </div>`;
   }
 
@@ -564,6 +569,22 @@
     return match ? { tag: match[1], title: match[2] } : { tag: null, title: description };
   }
 
+  // Shared by the card view (Scheduled Work tab) and the table view
+  // (Timeline breakdown) so the two surfaces edit the exact same fields.
+  function renderEditItemForm(i) {
+    return `
+      <form data-work-dates-id="${i.id}">
+        <label>Description<input type="text" name="description" value="${escapeHtml(i.description)}" required></label>
+        <label>Quantity<input type="number" name="quantity" min="1" value="${i.quantity}" required></label>
+        <label>Completed quantity<input type="number" name="completedQuantity" min="0" max="${i.quantity}" value="${i.completed_quantity}" required></label>
+        <label>Notes<textarea name="notes" rows="2" placeholder="Optional — blockers, partial progress, anything worth flagging">${escapeHtml(i.notes || '')}</textarea></label>
+        <label>Scheduled date<input type="date" name="scheduledDate" value="${i.scheduled_date ? String(i.scheduled_date).slice(0, 10) : ''}" required></label>
+        <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(i.completed_at)}"></label>
+        <div class="actions"><button class="btn secondary" type="submit">Save</button></div>
+        <div class="error hidden" id="work-dates-error-${i.id}"></div>
+      </form>`;
+  }
+
   function renderScheduledItem(i) {
     const { tag, title } = splitSignType(i.description);
     return `
@@ -571,25 +592,58 @@
         <div class="issue-item-header">
           <div>
             <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}</div>
-            <div class="meta">Qty ${i.quantity} &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+            <div class="meta">${i.completed_quantity}/${i.quantity} installed &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+            ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
             <button type="button" class="work-dates-toggle" data-work-dates="${i.id}">Edit Item</button>
           </div>
           <div class="list-item-actions">
-            <span class="badge ${i.status}">${i.status}</span>
-            <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'scheduled' ? 'complete' : 'scheduled'}">${i.status === 'scheduled' ? 'Mark Complete' : 'Reopen'}</button>
+            <span class="badge ${i.status}">${i.status.replace('_', ' ')}</span>
+            <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'complete' ? 'scheduled' : 'complete'}">${i.status === 'complete' ? 'Reopen' : 'Mark Complete'}</button>
             <button class="btn danger" data-delete-id="${i.id}">Delete</button>
           </div>
         </div>
-        <div class="stage-dates-form hidden" id="work-dates-${i.id}">
-          <form data-work-dates-id="${i.id}">
-            <label>Description<input type="text" name="description" value="${escapeHtml(i.description)}" required></label>
-            <label>Quantity<input type="number" name="quantity" min="1" value="${i.quantity}" required></label>
-            <label>Scheduled date<input type="date" name="scheduledDate" value="${i.scheduled_date ? String(i.scheduled_date).slice(0, 10) : ''}" required></label>
-            <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(i.completed_at)}"></label>
-            <div class="actions"><button class="btn secondary" type="submit">Save</button></div>
-            <div class="error hidden" id="work-dates-error-${i.id}"></div>
-          </form>
-        </div>
+        <div class="stage-dates-form hidden" id="work-dates-${i.id}">${renderEditItemForm(i)}</div>
+      </div>`;
+  }
+
+  function renderScheduledItemRow(i) {
+    const { tag, title } = splitSignType(i.description);
+    return `
+      <tr>
+        <td>
+          ${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}
+          ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
+        </td>
+        <td>${i.completed_quantity}/${i.quantity}</td>
+        <td>${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? `<div class="muted">Done ${fmtDateShort(i.completed_at)}</div>` : ''}</td>
+        <td><span class="badge ${i.status}">${i.status.replace('_', ' ')}</span></td>
+        <td class="breakdown-row-actions">
+          <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'complete' ? 'scheduled' : 'complete'}">${i.status === 'complete' ? 'Reopen' : 'Mark Complete'}</button>
+          <button type="button" class="work-dates-toggle" data-work-dates="${i.id}">Edit Item</button>
+          <button class="btn danger" data-delete-id="${i.id}">Delete</button>
+        </td>
+      </tr>
+      <tr class="hidden" id="work-dates-${i.id}">
+        <td colspan="5" class="stage-dates-form">${renderEditItemForm(i)}</td>
+      </tr>`;
+  }
+
+  // Always renders every item, grouped by sign type — replaces an earlier
+  // click-to-expand-each-tag design that made scanning progress tedious and,
+  // worse, lost its expanded state (so edits didn't visibly update) every
+  // time the timeline re-rendered after a change.
+  function renderBreakdownTable(breakdown) {
+    const rows = breakdown.map(([tag, g]) => {
+      const items = scheduledWorkItems.filter((i) => (splitSignType(i.description).tag || 'Other') === tag);
+      const groupRow = `<tr class="breakdown-table-group"><td colspan="5">${escapeHtml(tag)} <span class="muted">&middot; ${g.complete}/${g.total} complete</span></td></tr>`;
+      return groupRow + items.map(renderScheduledItemRow).join('');
+    }).join('');
+    return `
+      <div class="breakdown-table-wrap">
+        <table class="breakdown-table">
+          <thead><tr><th>Item</th><th>Done</th><th>Scheduled</th><th>Status</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>`;
   }
 
@@ -598,7 +652,10 @@
   // renderScheduledItem() and need the same Mark Complete/Reopen, Delete,
   // and Edit Dates behavior wired up.
   function wireScheduledItemEvents(el) {
-    el.querySelectorAll('button[data-status]').forEach((btn) => {
+    // [data-id] excludes the timeline's stage Start/Complete buttons, which
+    // also carry data-status but key off data-stage instead — both kinds
+    // can now appear inside the same #timeline container.
+    el.querySelectorAll('button[data-status][data-id]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         await api('/scheduled-work/' + btn.dataset.id, { method: 'PATCH', body: { status: btn.dataset.status } });
         await loadScheduledWork();
@@ -635,6 +692,8 @@
               action: 'edit',
               description: fd.get('description'),
               quantity: Number(fd.get('quantity')) || 1,
+              completedQuantity: Number(fd.get('completedQuantity')) || 0,
+              notes: fd.get('notes') || null,
               scheduledDate: fd.get('scheduledDate'),
               completedAt: fd.get('completedAt') || null,
             },
@@ -658,8 +717,9 @@
       el.innerHTML = '<p class="muted">No scheduled work yet.</p>';
       return;
     }
-    const wantStatus = scheduledWorkSubtab === 'upcoming' ? 'scheduled' : 'complete';
-    const items = scheduledWorkItems.filter((i) => i.status === wantStatus);
+    const items = scheduledWorkItems.filter((i) =>
+      scheduledWorkSubtab === 'upcoming' ? i.status !== 'complete' : i.status === 'complete'
+    );
     el.innerHTML = items.length
       ? items.map(renderScheduledItem).join('')
       : `<p class="muted">${scheduledWorkSubtab === 'upcoming' ? 'Nothing scheduled.' : 'Nothing completed yet.'}</p>`;
@@ -702,6 +762,53 @@
     } catch (err) {
       errorEl.textContent = err.message;
       errorEl.classList.remove('hidden');
+    }
+  });
+
+  function renderBackfillResult(plan) {
+    const el = document.getElementById('backfill-result');
+    if (!plan.changes.length) {
+      el.innerHTML = `<p class="muted">No confident matches to correct — ${plan.matchedRows}/${plan.totalRows} items matched the tracker and already have the right quantity, ${plan.untouchedRows} left untouched.</p>`;
+      return;
+    }
+    const rows = plan.changes
+      .map((c) => `<li>${escapeHtml(c.description)} — <strong>${c.oldQuantity} &rarr; ${c.newQuantity}</strong></li>`)
+      .join('');
+    const applyBtn = plan.applied
+      ? '<p class="muted">Applied.</p>'
+      : '<button class="btn secondary" type="button" id="backfill-apply-btn">Apply these changes</button>';
+    el.innerHTML = `
+      <p>${plan.changes.length} item(s) would change (${plan.untouchedRows} left untouched as extras/unmatched):</p>
+      <ul>${rows}</ul>
+      ${applyBtn}
+    `;
+    if (!plan.applied) {
+      document.getElementById('backfill-apply-btn').addEventListener('click', async () => {
+        const btn = document.getElementById('backfill-apply-btn');
+        btn.disabled = true;
+        try {
+          const applied = await api('/backfill-quantities', { method: 'POST', body: { projectId, apply: true } });
+          renderBackfillResult(applied);
+          await loadScheduledWork();
+          renderTimeline();
+        } catch (err) {
+          btn.disabled = false;
+          alert(err.message);
+        }
+      });
+    }
+  }
+
+  document.getElementById('backfill-preview-btn').addEventListener('click', async () => {
+    const btn = document.getElementById('backfill-preview-btn');
+    btn.disabled = true;
+    try {
+      const plan = await api('/backfill-quantities', { method: 'POST', body: { projectId, apply: false } });
+      renderBackfillResult(plan);
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      btn.disabled = false;
     }
   });
 

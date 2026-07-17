@@ -212,6 +212,7 @@ label {
   vertical-align: middle;
 }
 .qty-badge { font-size: 13px; font-weight: 600; color: var(--muted); }
+.item-notes { font-size: 13px; color: var(--muted); font-style: italic; margin-top: 2px; }
 
 table { width: 100%; border-collapse: collapse; }
 table th, table td { text-align: left; padding: 9px 6px; border-bottom: 1px solid var(--border); font-size: 14px; }
@@ -292,23 +293,30 @@ main > .section-heading:first-child { margin-top: 0; }
 .timeline-info { flex: 1 1 200px; min-width: 0; }
 .timeline .meta { margin-top: 3px; font-size: 13px; color: var(--text); opacity: 0.75; }
 .timeline .stage-actions { display: flex; gap: 6px; flex-wrap: wrap; }
-.breakdown-hint { font-size: 12px; margin: 6px 0 0; }
-.scheduled-breakdown { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 4px; }
-.breakdown-chip {
-  display: inline-block;
-  padding: 2px 9px;
-  border: none;
-  border-radius: 999px;
-  font-size: 12px;
+.breakdown-table-wrap { margin-top: 10px; overflow-x: auto; }
+.breakdown-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.breakdown-table th {
+  text-align: left;
+  padding: 6px 8px;
+  color: var(--muted);
   font-weight: 600;
-  font-family: inherit;
-  background: var(--accent-tint);
-  color: var(--accent-dark);
-  white-space: nowrap;
-  cursor: pointer;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--border);
 }
-.breakdown-chip:hover { opacity: 0.8; }
-.breakdown-chip.complete { background: #e1ead9; color: var(--success); }
+.breakdown-table td { padding: 8px; border-bottom: 1px solid var(--border); vertical-align: top; }
+.breakdown-table tr:last-child td { border-bottom: none; }
+.breakdown-table-group td {
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--accent-dark);
+  background: var(--bg);
+  padding-top: 10px;
+}
+.breakdown-row-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
 .stage-links { display: flex; gap: 14px; margin-top: 6px; }
 .stage-detail-toggle, .stage-dates-toggle, .work-dates-toggle {
   display: block;

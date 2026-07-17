@@ -133,10 +133,10 @@
       if (!groups.has(key)) groups.set(key, { total: 0, complete: 0 });
       const g = groups.get(key);
       // Counted in sign units (quantity), not tracker rows — one row can
-      // cover many physical signs (e.g. "12 pocket signs on Level 26").
-      const qty = i.quantity || 1;
-      g.total += qty;
-      if (i.status === 'complete') g.complete += qty;
+      // cover many physical signs (e.g. "12 pocket signs on Level 26") and
+      // may only be partially installed so far.
+      g.total += i.quantity || 1;
+      g.complete += i.completed_quantity || 0;
     });
     return Array.from(groups.entries()).sort((a, b) => a[0].localeCompare(b[0]));
   }
@@ -156,7 +156,7 @@
         <div class="timeline-info">
           <strong>${escapeHtml(s.name)}</strong>
           <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
-          ${breakdown ? `<div class="scheduled-breakdown">${breakdown.map(([tag, g]) => `<span class="breakdown-chip ${g.complete === g.total ? 'complete' : ''}">${escapeHtml(tag)} ${g.complete}/${g.total}</span>`).join('')}</div>` : ''}
+          ${breakdown ? renderBreakdownTable(breakdown) : ''}
           ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button><div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>` : ''}
         </div>
         <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
@@ -177,8 +177,13 @@
 
   function renderStageDetail(stageNumber, el) {
     const stage = stages.find((s) => s.stage_number === stageNumber);
-    const items = scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage);
-    const itemsHtml = items.map(renderScheduledItemReadOnly).join('');
+    // Installed & Complete already has its own authoritative item list (the
+    // sign-type breakdown chips, grouped by tag) — repeating items here too,
+    // filtered by a guess at which stage was active on the item's date,
+    // could disagree with the breakdown and show a different set entirely.
+    const itemsHtml = stage.name === 'Installed & Complete'
+      ? ''
+      : scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage).map(renderScheduledItemReadOnly).join('');
 
     let photoHtml = '';
     if (INSTALLATION_STAGES.includes(stage.name)) {
@@ -216,9 +221,39 @@
       <div class="list-item">
         <div>
           <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}</div>
-          <div class="meta">Qty ${i.quantity} &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+          <div class="meta">${i.completed_quantity}/${i.quantity} installed &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+          ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
         </div>
-        <span class="badge ${i.status}">${i.status}</span>
+        <span class="badge ${i.status}">${i.status.replace('_', ' ')}</span>
+      </div>`;
+  }
+
+  // Always renders every item, grouped by sign type, instead of requiring a
+  // click per sign type to see anything.
+  function renderBreakdownTable(breakdown) {
+    const rows = breakdown.map(([tag, g]) => {
+      const items = scheduledWorkItems.filter((i) => (splitSignType(i.description).tag || 'Other') === tag);
+      const groupRow = `<tr class="breakdown-table-group"><td colspan="3">${escapeHtml(tag)} <span class="muted">&middot; ${g.complete}/${g.total} complete</span></td></tr>`;
+      const itemRows = items.map((i) => {
+        const { tag: itemTag, title } = splitSignType(i.description);
+        return `
+          <tr>
+            <td>
+              ${itemTag ? `<span class="tag">${escapeHtml(itemTag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}
+              ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
+            </td>
+            <td>${i.completed_quantity}/${i.quantity}</td>
+            <td><span class="badge ${i.status}">${i.status.replace('_', ' ')}</span></td>
+          </tr>`;
+      }).join('');
+      return groupRow + itemRows;
+    }).join('');
+    return `
+      <div class="breakdown-table-wrap">
+        <table class="breakdown-table">
+          <thead><tr><th>Item</th><th>Done</th><th>Status</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>`;
   }
 
@@ -273,9 +308,10 @@
       <div class="list-item">
         <div>
           <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}</div>
-          <div class="meta">Qty ${i.quantity} &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+          <div class="meta">${i.completed_quantity}/${i.quantity} installed &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+          ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
         </div>
-        <span class="badge ${i.status}">${i.status}</span>
+        <span class="badge ${i.status}">${i.status.replace('_', ' ')}</span>
       </div>`;
   }
 
@@ -288,8 +324,9 @@
       el.innerHTML = '<p class="muted">No scheduled work yet.</p>';
       return;
     }
-    const wantStatus = scheduledWorkSubtab === 'upcoming' ? 'scheduled' : 'complete';
-    const items = scheduledWorkItems.filter((i) => i.status === wantStatus);
+    const items = scheduledWorkItems.filter((i) =>
+      scheduledWorkSubtab === 'upcoming' ? i.status !== 'complete' : i.status === 'complete'
+    );
     el.innerHTML = items.length
       ? items.map(renderScheduledItem).join('')
       : `<p class="muted">${scheduledWorkSubtab === 'upcoming' ? 'Nothing scheduled.' : 'Nothing completed yet.'}</p>`;
