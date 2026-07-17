@@ -221,20 +221,14 @@
         <div class="timeline-info">
           <strong>${escapeHtml(s.name)}</strong>
           <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
-          ${breakdown ? `
-            <p class="muted breakdown-hint">Tap a sign type below to edit its items' dates individually:</p>
-            <div class="scheduled-breakdown">
-              ${breakdown.map(([tag, g]) => `<button type="button" class="breakdown-chip ${g.complete === g.total ? 'complete' : ''}" data-breakdown-tag="${escapeHtml(tag)}">${escapeHtml(tag)} ${g.complete}/${g.total}</button>`).join('')}
-            </div>
-            ${breakdown.map(([tag]) => `<div class="breakdown-group hidden" id="breakdown-group-${escapeHtml(tag)}"></div>`).join('')}
-          ` : ''}
+          ${breakdown ? renderBreakdownTable(breakdown) : ''}
           <div class="stage-links">
             ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button>` : ''}
             <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">${breakdown ? 'Edit Stage Dates (all items)' : 'Edit Dates'}</button>
           </div>
           <div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>
           <div class="stage-dates-form hidden" id="stage-dates-${s.stage_number}">
-            ${breakdown ? '<p class="muted" style="margin:0 0 8px;">This sets the stage\'s own overall dates, not any individual item\'s — tap a sign-type chip above to edit a specific item.</p>' : ''}
+            ${breakdown ? '<p class="muted" style="margin:0 0 8px;">This sets the stage\'s own overall dates, not any individual item\'s — edit a specific item directly in the table above.</p>' : ''}
             <form data-dates-stage="${s.stage_number}">
               <label>Started<input type="date" name="startedAt" value="${toDateInputValue(s.started_at)}"></label>
               <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(s.completed_at)}"></label>
@@ -252,7 +246,12 @@
       </li>`;
     }).join('');
 
-    document.querySelectorAll('#timeline button[data-status]').forEach((btn) => {
+    // Stage Start/Complete buttons (data-stage) and per-item Mark
+    // Complete/Reopen buttons (data-id, wired below via
+    // wireScheduledItemEvents) both use data-status and now share the
+    // #timeline container — scope this to data-stage specifically so it
+    // doesn't also catch item buttons and PATCH the wrong endpoint.
+    document.querySelectorAll('#timeline button[data-status][data-stage]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         await api('/projects/' + projectId, {
           method: 'PATCH',
@@ -279,23 +278,12 @@
       });
     });
 
-    document.querySelectorAll('button[data-breakdown-tag]').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        const tag = btn.dataset.breakdownTag;
-        const groupEl = document.getElementById('breakdown-group-' + tag);
-        const isHidden = groupEl.classList.contains('hidden');
-        if (isHidden) {
-          const items = scheduledWorkItems.filter((i) => (splitSignType(i.description).tag || 'Other') === tag);
-          const totalQty = items.reduce((sum, i) => sum + (i.quantity || 1), 0);
-          const completeQty = items.reduce((sum, i) => sum + (i.completed_quantity || 0), 0);
-          groupEl.innerHTML = `
-            <div class="breakdown-group-header">${escapeHtml(tag)} <span class="muted">&middot; ${completeQty}/${totalQty} complete</span></div>
-            ${items.map(renderScheduledItem).join('')}`;
-          wireScheduledItemEvents(groupEl);
-        }
-        groupEl.classList.toggle('hidden', !isHidden);
-      });
-    });
+    // Wires Mark Complete/Reopen, Delete, and Edit Item for every row in
+    // every stage's breakdown table in one pass — since the whole timeline
+    // (including the table) is rebuilt fresh on every change, there's no
+    // separate expand-and-repopulate step, so an edit is reflected
+    // immediately instead of needing another click to see it.
+    wireScheduledItemEvents(document.getElementById('timeline'));
 
     document.querySelectorAll('form[data-dates-stage]').forEach((form) => {
       form.addEventListener('submit', async (e) => {
@@ -581,6 +569,22 @@
     return match ? { tag: match[1], title: match[2] } : { tag: null, title: description };
   }
 
+  // Shared by the card view (Scheduled Work tab) and the table view
+  // (Timeline breakdown) so the two surfaces edit the exact same fields.
+  function renderEditItemForm(i) {
+    return `
+      <form data-work-dates-id="${i.id}">
+        <label>Description<input type="text" name="description" value="${escapeHtml(i.description)}" required></label>
+        <label>Quantity<input type="number" name="quantity" min="1" value="${i.quantity}" required></label>
+        <label>Completed quantity<input type="number" name="completedQuantity" min="0" max="${i.quantity}" value="${i.completed_quantity}" required></label>
+        <label>Notes<textarea name="notes" rows="2" placeholder="Optional — blockers, partial progress, anything worth flagging">${escapeHtml(i.notes || '')}</textarea></label>
+        <label>Scheduled date<input type="date" name="scheduledDate" value="${i.scheduled_date ? String(i.scheduled_date).slice(0, 10) : ''}" required></label>
+        <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(i.completed_at)}"></label>
+        <div class="actions"><button class="btn secondary" type="submit">Save</button></div>
+        <div class="error hidden" id="work-dates-error-${i.id}"></div>
+      </form>`;
+  }
+
   function renderScheduledItem(i) {
     const { tag, title } = splitSignType(i.description);
     return `
@@ -598,18 +602,48 @@
             <button class="btn danger" data-delete-id="${i.id}">Delete</button>
           </div>
         </div>
-        <div class="stage-dates-form hidden" id="work-dates-${i.id}">
-          <form data-work-dates-id="${i.id}">
-            <label>Description<input type="text" name="description" value="${escapeHtml(i.description)}" required></label>
-            <label>Quantity<input type="number" name="quantity" min="1" value="${i.quantity}" required></label>
-            <label>Completed quantity<input type="number" name="completedQuantity" min="0" max="${i.quantity}" value="${i.completed_quantity}" required></label>
-            <label>Notes<textarea name="notes" rows="2" placeholder="Optional — blockers, partial progress, anything worth flagging">${escapeHtml(i.notes || '')}</textarea></label>
-            <label>Scheduled date<input type="date" name="scheduledDate" value="${i.scheduled_date ? String(i.scheduled_date).slice(0, 10) : ''}" required></label>
-            <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(i.completed_at)}"></label>
-            <div class="actions"><button class="btn secondary" type="submit">Save</button></div>
-            <div class="error hidden" id="work-dates-error-${i.id}"></div>
-          </form>
-        </div>
+        <div class="stage-dates-form hidden" id="work-dates-${i.id}">${renderEditItemForm(i)}</div>
+      </div>`;
+  }
+
+  function renderScheduledItemRow(i) {
+    const { tag, title } = splitSignType(i.description);
+    return `
+      <tr>
+        <td>
+          ${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}
+          ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
+        </td>
+        <td>${i.completed_quantity}/${i.quantity}</td>
+        <td>${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? `<div class="muted">Done ${fmtDateShort(i.completed_at)}</div>` : ''}</td>
+        <td><span class="badge ${i.status}">${i.status.replace('_', ' ')}</span></td>
+        <td class="breakdown-row-actions">
+          <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'complete' ? 'scheduled' : 'complete'}">${i.status === 'complete' ? 'Reopen' : 'Mark Complete'}</button>
+          <button type="button" class="work-dates-toggle" data-work-dates="${i.id}">Edit Item</button>
+          <button class="btn danger" data-delete-id="${i.id}">Delete</button>
+        </td>
+      </tr>
+      <tr class="hidden" id="work-dates-${i.id}">
+        <td colspan="5" class="stage-dates-form">${renderEditItemForm(i)}</td>
+      </tr>`;
+  }
+
+  // Always renders every item, grouped by sign type — replaces an earlier
+  // click-to-expand-each-tag design that made scanning progress tedious and,
+  // worse, lost its expanded state (so edits didn't visibly update) every
+  // time the timeline re-rendered after a change.
+  function renderBreakdownTable(breakdown) {
+    const rows = breakdown.map(([tag, g]) => {
+      const items = scheduledWorkItems.filter((i) => (splitSignType(i.description).tag || 'Other') === tag);
+      const groupRow = `<tr class="breakdown-table-group"><td colspan="5">${escapeHtml(tag)} <span class="muted">&middot; ${g.complete}/${g.total} complete</span></td></tr>`;
+      return groupRow + items.map(renderScheduledItemRow).join('');
+    }).join('');
+    return `
+      <div class="breakdown-table-wrap">
+        <table class="breakdown-table">
+          <thead><tr><th>Item</th><th>Done</th><th>Scheduled</th><th>Status</th><th></th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>`;
   }
 
@@ -618,7 +652,10 @@
   // renderScheduledItem() and need the same Mark Complete/Reopen, Delete,
   // and Edit Dates behavior wired up.
   function wireScheduledItemEvents(el) {
-    el.querySelectorAll('button[data-status]').forEach((btn) => {
+    // [data-id] excludes the timeline's stage Start/Complete buttons, which
+    // also carry data-status but key off data-stage instead — both kinds
+    // can now appear inside the same #timeline container.
+    el.querySelectorAll('button[data-status][data-id]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         await api('/scheduled-work/' + btn.dataset.id, { method: 'PATCH', body: { status: btn.dataset.status } });
         await loadScheduledWork();

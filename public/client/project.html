@@ -156,7 +156,7 @@
         <div class="timeline-info">
           <strong>${escapeHtml(s.name)}</strong>
           <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
-          ${breakdown ? `<div class="scheduled-breakdown">${breakdown.map(([tag, g]) => `<span class="breakdown-chip ${g.complete === g.total ? 'complete' : ''}">${escapeHtml(tag)} ${g.complete}/${g.total}</span>`).join('')}</div>` : ''}
+          ${breakdown ? renderBreakdownTable(breakdown) : ''}
           ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button><div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>` : ''}
         </div>
         <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
@@ -225,6 +225,35 @@
           ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
         </div>
         <span class="badge ${i.status}">${i.status.replace('_', ' ')}</span>
+      </div>`;
+  }
+
+  // Always renders every item, grouped by sign type, instead of requiring a
+  // click per sign type to see anything.
+  function renderBreakdownTable(breakdown) {
+    const rows = breakdown.map(([tag, g]) => {
+      const items = scheduledWorkItems.filter((i) => (splitSignType(i.description).tag || 'Other') === tag);
+      const groupRow = `<tr class="breakdown-table-group"><td colspan="3">${escapeHtml(tag)} <span class="muted">&middot; ${g.complete}/${g.total} complete</span></td></tr>`;
+      const itemRows = items.map((i) => {
+        const { tag: itemTag, title } = splitSignType(i.description);
+        return `
+          <tr>
+            <td>
+              ${itemTag ? `<span class="tag">${escapeHtml(itemTag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}
+              ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
+            </td>
+            <td>${i.completed_quantity}/${i.quantity}</td>
+            <td><span class="badge ${i.status}">${i.status.replace('_', ' ')}</span></td>
+          </tr>`;
+      }).join('');
+      return groupRow + itemRows;
+    }).join('');
+    return `
+      <div class="breakdown-table-wrap">
+        <table class="breakdown-table">
+          <thead><tr><th>Item</th><th>Done</th><th>Status</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
       </div>`;
   }
 
