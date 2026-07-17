@@ -143,7 +143,24 @@ exports.handler = withErrorHandling(async (event) => {
       await client.query('BEGIN');
       try {
         for (const change of plan.changes) {
-          await client.query('UPDATE scheduled_work SET quantity = $1 WHERE id = $2', [change.newQuantity, change.id]);
+          // Raising or lowering quantity can strand completed_quantity above
+          // the new total (which the DB's CHECK constraint would reject) or
+          // leave status/completed_at claiming "complete" when only part of
+          // the corrected total is actually done — clamp and recompute both
+          // in the same statement instead of just overwriting quantity.
+          await client.query(
+            `UPDATE scheduled_work
+             SET quantity = $1,
+                 completed_quantity = LEAST(completed_quantity, $1),
+                 status = CASE
+                   WHEN LEAST(completed_quantity, $1) <= 0 THEN 'scheduled'
+                   WHEN LEAST(completed_quantity, $1) >= $1 THEN 'complete'
+                   ELSE 'in_progress'
+                 END,
+                 completed_at = CASE WHEN LEAST(completed_quantity, $1) >= $1 THEN completed_at ELSE NULL END
+             WHERE id = $2`,
+            [change.newQuantity, change.id]
+          );
         }
         await client.query('COMMIT');
       } catch (err) {

@@ -212,6 +212,7 @@ label {
   vertical-align: middle;
 }
 .qty-badge { font-size: 13px; font-weight: 600; color: var(--muted); }
+.item-notes { font-size: 13px; color: var(--muted); font-style: italic; margin-top: 2px; }
 
 table { width: 100%; border-collapse: collapse; }
 table th, table td { text-align: left; padding: 9px 6px; border-bottom: 1px solid var(--border); font-size: 14px; }

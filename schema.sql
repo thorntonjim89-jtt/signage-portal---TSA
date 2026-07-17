@@ -175,8 +175,14 @@ CREATE TABLE IF NOT EXISTS scheduled_work (
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   description TEXT NOT NULL,
   quantity INTEGER NOT NULL DEFAULT 1,
+  -- How many of `quantity` units are actually done — a row of 20 signs
+  -- with 18 installed is "in_progress", not stuck choosing between
+  -- "scheduled" and "complete". Status is derived from this, not set
+  -- independently (see scheduled-work.js).
+  completed_quantity INTEGER NOT NULL DEFAULT 0 CHECK (completed_quantity BETWEEN 0 AND quantity),
+  notes TEXT,
   scheduled_date DATE NOT NULL,
-  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'complete')),
+  status TEXT NOT NULL DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'in_progress', 'complete')),
   completed_at TIMESTAMPTZ,
   created_by INTEGER NOT NULL REFERENCES users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
