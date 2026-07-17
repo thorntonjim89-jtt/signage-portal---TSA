@@ -208,7 +208,7 @@
     // could disagree with the breakdown and show a different set entirely.
     const itemsHtml = stage.name === 'Installed & Complete'
       ? ''
-      : scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage).map(renderScheduledItemReadOnly).join('');
+      : renderItemsTable(scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage));
 
     let photoHtml = '';
     if (INSTALLATION_STAGES.includes(stage.name)) {
@@ -240,16 +240,30 @@
     wireFileLinks(el);
   }
 
-  function renderScheduledItemReadOnly(i) {
+  function renderScheduledItemRow(i) {
     const { tag, title } = splitSignType(i.description);
     return `
-      <div class="list-item">
-        <div>
-          <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}</div>
-          <div class="meta">${i.completed_quantity}/${i.quantity} installed &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
+      <tr>
+        <td>
+          ${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}
           ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
-        </div>
-        <span class="badge ${i.status}">${i.status.replace('_', ' ')}</span>
+        </td>
+        <td data-label="Done">${i.completed_quantity}/${i.quantity}</td>
+        <td data-label="Status"><span class="badge ${i.status}">${i.status.replace('_', ' ')}</span></td>
+      </tr>`;
+  }
+
+  // Plain, ungrouped item table — used for a single stage's Details panel,
+  // where items aren't naturally grouped by sign type the way the
+  // Installed & Complete breakdown is.
+  function renderItemsTable(items) {
+    if (!items.length) return '';
+    return `
+      <div class="breakdown-table-wrap">
+        <table class="breakdown-table">
+          <thead><tr><th>Item</th><th>Done</th><th>Status</th></tr></thead>
+          <tbody>${items.map(renderScheduledItemRow).join('')}</tbody>
+        </table>
       </div>`;
   }
 
@@ -259,19 +273,7 @@
     const rows = breakdown.map(([tag, g]) => {
       const items = scheduledWorkItems.filter((i) => (splitSignType(i.description).tag || 'Other') === tag);
       const groupRow = `<tr class="breakdown-table-group"><td colspan="3">${escapeHtml(tag)} <span class="muted">&middot; ${g.complete}/${g.total} complete</span></td></tr>`;
-      const itemRows = items.map((i) => {
-        const { tag: itemTag, title } = splitSignType(i.description);
-        return `
-          <tr>
-            <td>
-              ${itemTag ? `<span class="tag">${escapeHtml(itemTag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}
-              ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
-            </td>
-            <td data-label="Done">${i.completed_quantity}/${i.quantity}</td>
-            <td data-label="Status"><span class="badge ${i.status}">${i.status.replace('_', ' ')}</span></td>
-          </tr>`;
-      }).join('');
-      return groupRow + itemRows;
+      return groupRow + items.map(renderScheduledItemRow).join('');
     }).join('');
     return `
       <div class="breakdown-table-wrap">
