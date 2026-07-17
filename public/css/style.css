@@ -185,6 +185,13 @@ label {
   color: var(--muted);
   white-space: nowrap;
   flex-shrink: 0;
+  /* A status word can be as short as "open" or as long as "in progress" —
+     without a floor, every badge is a visibly different pill size next to
+     its neighbors. This is applied everywhere badges appear, not just the
+     timeline, since the same inconsistency shows up on every dashboard and
+     list in the app. */
+  min-width: 92px;
+  text-align: center;
 }
 .badge.submitted, .badge.requested { background: #f4e6c9; color: #8a6a1f; }
 .badge.pricing { background: #f3e4c4; color: var(--warn); }
@@ -237,6 +244,11 @@ table th { color: var(--muted); font-weight: 600; font-size: 12px; text-transfor
 .list-item .title { font-weight: 600; }
 .list-item .meta { font-size: 13px; color: var(--muted); }
 .list-item-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+/* Buttons sitting next to each other in an action row read as a matched
+   set when they share a width floor — "Start" next to "Complete" (or
+   "Reopen" next to "Delete") otherwise looks like two random-sized boxes
+   rather than one control group. */
+.stage-actions .btn, .list-item-actions .btn, .actions .btn { min-width: 96px; text-align: center; }
 .file-link { color: inherit; text-decoration: none; flex: 1; min-width: 0; }
 .file-link:hover { opacity: 0.7; }
 
@@ -313,7 +325,11 @@ main > .section-heading:first-child { margin-top: 0; }
   background: var(--bg);
   padding-top: 10px;
 }
-.breakdown-row-actions { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+/* align-items: stretch (not flex-start) so every button in the stack
+   matches the width of the widest one, instead of each hugging its own
+   label and leaving a ragged right edge. */
+.breakdown-row-actions { display: flex; flex-direction: column; gap: 4px; align-items: stretch; }
+.breakdown-row-actions .btn { text-align: center; }
 
 /* Below 700px (the breakpoint the rest of the timeline already switches
    on), a 5-column table has no room to breathe — turn each row into its
@@ -401,6 +417,24 @@ main > .section-heading:first-child { margin-top: 0; }
   .timeline-row { flex-wrap: nowrap; }
   .timeline .badge { flex: 0 0 108px; margin-top: 2px; text-align: center; }
   .timeline .stage-actions { flex: 0 0 200px; justify-content: flex-end; }
+
+  /* Fixed layout + explicit column widths, rather than letting each row's
+     own content decide column widths independently — that's what let
+     "0/1" and "40/87" and a date and a status pill all land at different
+     x-positions depending on what else was in that particular row. Every
+     row now shares the exact same grid. Item is the only column left to
+     flex; this also works for the client table's 3 columns since Item/
+     Done are still positions 1-2 there and the 3rd column (Status) gets
+     the same width reserved for Scheduled on the team table — both are
+     short, so it fits either way. Scoped to this breakpoint because it's
+     more specific than the mobile stacked-card rules below and would
+     otherwise win there too and break that layout. */
+  .breakdown-table { table-layout: fixed; }
+  .breakdown-table th:nth-child(1), .breakdown-table td:nth-child(1) { width: auto; }
+  .breakdown-table th:nth-child(2), .breakdown-table td:nth-child(2) { width: 64px; }
+  .breakdown-table th:nth-child(3), .breakdown-table td:nth-child(3) { width: 112px; }
+  .breakdown-table th:nth-child(4), .breakdown-table td:nth-child(4) { width: 112px; }
+  .breakdown-table th:nth-child(5), .breakdown-table td:nth-child(5) { width: 168px; }
 }
 
 .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 10px; }
