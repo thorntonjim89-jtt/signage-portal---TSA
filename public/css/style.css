@@ -355,8 +355,23 @@ main > .section-heading:first-child { margin-top: 0; }
   .breakdown-table-group td { border-radius: 8px; margin: 10px 0 4px; padding: 8px; }
 }
 
-.stage-links { display: flex; gap: 14px; margin-top: 6px; }
-.stage-detail-toggle, .stage-dates-toggle, .work-dates-toggle {
+.stage-links { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+/* A bare text link next to a full-size Start/Complete button read as an
+   afterthought — a small bordered pill gives it enough visual weight to
+   look like an intentional second control, not a stray label. */
+.stage-detail-toggle, .stage-dates-toggle {
+  display: inline-block;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+  cursor: pointer;
+}
+.stage-detail-toggle:hover, .stage-dates-toggle:hover { background: var(--bg); color: var(--accent-dark); }
+.work-dates-toggle {
   display: block;
   background: none;
   border: none;
@@ -366,7 +381,7 @@ main > .section-heading:first-child { margin-top: 0; }
   color: var(--accent);
   cursor: pointer;
 }
-.stage-detail-toggle:hover, .stage-dates-toggle:hover, .work-dates-toggle:hover { color: var(--accent-dark); }
+.work-dates-toggle:hover { color: var(--accent-dark); }
 .stage-detail { margin-top: 10px; }
 .stage-detail .photo-grid { margin-bottom: 10px; }
 .stage-detail .list-item { padding: 9px 0; }

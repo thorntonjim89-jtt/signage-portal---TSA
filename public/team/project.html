@@ -93,6 +93,11 @@
   let stages = [];
   let scheduledWorkItems = [];
   let stageNotes = [];
+  // Which stage's Details panel is currently open, if any — renderTimeline()
+  // rebuilds the whole list from scratch on every change (same as the
+  // breakdown table), so without tracking this, editing an item from inside
+  // an open Details panel would silently collapse it back to empty.
+  let expandedStageDetail = null;
   let allPhotos = [];
   let designPacks = [];
 
@@ -255,10 +260,10 @@
             <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
             ${renderStageNotes(s.stage_number)}
             <div class="stage-links">
-              ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ▾</button>` : ''}
+              ${s.started_at ? `<button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ${expandedStageDetail === s.stage_number ? '▴' : '▾'}</button>` : ''}
               <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">${breakdown ? 'Edit Stage Dates (all items)' : 'Edit Dates'}</button>
             </div>
-            <div class="stage-detail hidden" id="stage-detail-${s.stage_number}"></div>
+            <div class="stage-detail${expandedStageDetail === s.stage_number ? '' : ' hidden'}" id="stage-detail-${s.stage_number}"></div>
             <div class="stage-dates-form hidden" id="stage-dates-${s.stage_number}">
               ${breakdown ? '<p class="muted" style="margin:0 0 8px;">This sets the stage\'s own overall dates, not any individual item\'s — edit a specific item directly in the table below.</p>' : ''}
               <form data-dates-stage="${s.stage_number}">
@@ -276,9 +281,14 @@
             ${s.status !== 'complete' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="complete">Complete</button>` : ''}
           </div>
         </div>
-        ${breakdown ? renderBreakdownTable(breakdown) : ''}
+        ${breakdown ? `<div id="installed-complete-table">${renderBreakdownTable(breakdown)}</div>` : ''}
       </li>`;
     }).join('');
+
+    if (expandedStageDetail) {
+      const detailEl = document.getElementById('stage-detail-' + expandedStageDetail);
+      if (detailEl) renderStageDetail(expandedStageDetail, detailEl);
+    }
 
     // Stage Start/Complete buttons (data-stage) and per-item Mark
     // Complete/Reopen buttons (data-id, wired below via
@@ -300,7 +310,12 @@
         const stageNumber = Number(btn.dataset.stage);
         const detailEl = document.getElementById('stage-detail-' + stageNumber);
         const isHidden = detailEl.classList.contains('hidden');
-        if (isHidden) renderStageDetail(stageNumber, detailEl);
+        if (isHidden) {
+          renderStageDetail(stageNumber, detailEl);
+          expandedStageDetail = stageNumber;
+        } else {
+          expandedStageDetail = null;
+        }
         detailEl.classList.toggle('hidden', !isHidden);
         btn.textContent = isHidden ? 'Details ▴' : 'Details ▾';
       });
@@ -344,11 +359,17 @@
     });
 
     // Wires Mark Complete/Reopen, Delete, and Edit Item for every row in
-    // every stage's breakdown table in one pass — since the whole timeline
-    // (including the table) is rebuilt fresh on every change, there's no
-    // separate expand-and-repopulate step, so an edit is reflected
-    // immediately instead of needing another click to see it.
-    wireScheduledItemEvents(document.getElementById('timeline'));
+    // the Installed & Complete breakdown table — since the whole timeline
+    // is rebuilt fresh on every change, there's no separate expand-and-
+    // repopulate step, so an edit is reflected immediately. Deliberately
+    // scoped to just this table's own container rather than the whole
+    // #timeline: a stage's Details panel (elsewhere in #timeline, wired
+    // separately inside renderStageDetail) can show the exact same item at
+    // the same time, and a wider scope here would both double-wire that
+    // panel's own copy and make its data-work-dates-target lookups
+    // ambiguous between the two occurrences.
+    const installedCompleteTable = document.getElementById('installed-complete-table');
+    if (installedCompleteTable) wireScheduledItemEvents(installedCompleteTable);
 
     document.querySelectorAll('form[data-dates-stage]').forEach((form) => {
       form.addEventListener('submit', async (e) => {
@@ -379,13 +400,15 @@
   function renderStageDetail(stageNumber, el) {
     const stage = stages.find((s) => s.stage_number === stageNumber);
     // Installed & Complete already has its own authoritative item list (the
-    // sign-type breakdown chips, grouped by tag). Repeating items here too —
-    // filtered by a *guess* at which stage was active on the item's date —
-    // could disagree with the breakdown and show a different set entirely,
-    // so this stage's Details only covers photos.
+    // sign-type breakdown, grouped by tag, showing every item regardless of
+    // date) — repeating it here too, filtered by a *guess* at which stage
+    // was active on the item's date, could disagree with that and show a
+    // different set entirely, so this stage's Details only covers photos.
+    // Every other stage uses the same editable table, just scoped to
+    // whichever items fall in its date range.
     const itemsHtml = stage.name === 'Installed & Complete'
       ? ''
-      : scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage).map(renderScheduledItemReadOnly).join('');
+      : renderItemsTable(scheduledWorkItems.filter((i) => stageForDate(i.scheduled_date, stages) === stage));
 
     let photoHtml = '';
     if (INSTALLATION_STAGES.includes(stage.name)) {
@@ -424,6 +447,11 @@
       ? `${designPackHtml}${photoHtml}${itemsHtml}`
       : '<p class="muted" style="margin:10px 0 0;">Nothing logged during this stage yet.</p>';
     wireFileLinks(el);
+    // Scoped to this stage's own detail panel — see the note in
+    // wireScheduledItemEvents about why a narrow scope matters here: the
+    // same item can also be sitting in the Installed & Complete table
+    // elsewhere in #timeline at the same time.
+    wireScheduledItemEvents(el);
 
     el.querySelectorAll('button[data-delete-pack]').forEach((btn) => {
       btn.addEventListener('click', async () => {
@@ -462,19 +490,6 @@
         }
       });
     }
-  }
-
-  function renderScheduledItemReadOnly(i) {
-    const { tag, title } = splitSignType(i.description);
-    return `
-      <div class="list-item">
-        <div>
-          <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}</div>
-          <div class="meta">${i.completed_quantity}/${i.quantity} installed &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
-          ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
-        </div>
-        <span class="badge ${i.status}">${i.status.replace('_', ' ')}</span>
-      </div>`;
   }
 
   async function loadPhotos() {
@@ -646,7 +661,7 @@
         <label>Scheduled date<input type="date" name="scheduledDate" value="${i.scheduled_date ? String(i.scheduled_date).slice(0, 10) : ''}" required></label>
         <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(i.completed_at)}"></label>
         <div class="actions"><button class="btn secondary" type="submit">Save</button></div>
-        <div class="error hidden" id="work-dates-error-${i.id}"></div>
+        <div class="error hidden"></div>
       </form>`;
   }
 
@@ -667,7 +682,7 @@
             <button class="btn danger" data-delete-id="${i.id}">Delete</button>
           </div>
         </div>
-        <div class="stage-dates-form hidden" id="work-dates-${i.id}">${renderEditItemForm(i)}</div>
+        <div class="stage-dates-form hidden" data-work-dates-target="${i.id}">${renderEditItemForm(i)}</div>
       </div>`;
   }
 
@@ -688,9 +703,23 @@
           <button class="btn danger" data-delete-id="${i.id}">Delete</button>
         </td>
       </tr>
-      <tr class="hidden" id="work-dates-${i.id}">
+      <tr class="hidden" data-work-dates-target="${i.id}">
         <td colspan="5" class="stage-dates-form">${renderEditItemForm(i)}</td>
       </tr>`;
+  }
+
+  // Plain, ungrouped item table — used for a single stage's Details panel,
+  // where items aren't naturally grouped by sign type the way the
+  // Installed & Complete breakdown is.
+  function renderItemsTable(items) {
+    if (!items.length) return '';
+    return `
+      <div class="breakdown-table-wrap">
+        <table class="breakdown-table">
+          <thead><tr><th>Item</th><th>Done</th><th>Scheduled</th><th>Status</th><th></th></tr></thead>
+          <tbody>${items.map(renderScheduledItemRow).join('')}</tbody>
+        </table>
+      </div>`;
   }
 
   // Always renders every item, grouped by sign type — replaces an earlier
@@ -737,18 +766,38 @@
       });
     });
 
+    // Scoped to el (not document.getElementById) because the same item can
+    // legitimately appear twice at once — once in a stage's own Details
+    // panel (date-inferred) and once in the Installed & Complete breakdown
+    // (tag-grouped, shows every item regardless of date) — a global id
+    // lookup would silently grab whichever copy happens to be first in the
+    // document instead of the one actually being edited.
     el.querySelectorAll('button[data-work-dates]').forEach((btn) => {
       btn.addEventListener('click', () => {
-        document.getElementById('work-dates-' + btn.dataset.workDates).classList.toggle('hidden');
+        el.querySelector('[data-work-dates-target="' + btn.dataset.workDates + '"]').classList.toggle('hidden');
       });
     });
 
     el.querySelectorAll('form[data-work-dates-id]').forEach((form) => {
+      // completedQuantity's max is set from the item's quantity at render
+      // time — if someone raises Quantity and sets Completed quantity in
+      // the same edit, that max is now stale, and the browser silently
+      // blocks the whole submit (no error, nothing happens) rather than
+      // letting the new quantity take effect. Keep max in sync live so
+      // raising both together in one edit actually works.
+      const qtyInput = form.querySelector('input[name=quantity]');
+      const completedQtyInput = form.querySelector('input[name=completedQuantity]');
+      if (qtyInput && completedQtyInput) {
+        qtyInput.addEventListener('input', () => {
+          completedQtyInput.max = qtyInput.value || '';
+        });
+      }
+
       form.addEventListener('submit', async (e) => {
         e.preventDefault();
         const workId = form.dataset.workDatesId;
         const fd = new FormData(form);
-        const errorEl = document.getElementById('work-dates-error-' + workId);
+        const errorEl = form.querySelector('.error');
         errorEl.classList.add('hidden');
         try {
           await api('/scheduled-work/' + workId, {
