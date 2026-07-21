@@ -6,7 +6,6 @@ const STAGE_NAMES = [
   'Design & Proofing',
   'Client Approval',
   'Production',
-  'Quality Check',
   'Shipping',
   'Installed & Complete',
 ];
@@ -23,7 +22,7 @@ async function assertProjectAccess(user, projectId) {
 async function listProjects(user) {
   let result;
   const select = `SELECT p.*, EXISTS (
-    SELECT 1 FROM project_stages ps WHERE ps.project_id = p.id AND ps.stage_number = 7 AND ps.status = 'complete'
+    SELECT 1 FROM project_stages ps WHERE ps.project_id = p.id AND ps.stage_number = 6 AND ps.status = 'complete'
   ) AS is_complete FROM projects p`;
   if (user.role === 'client') {
     result = await query(select + ' WHERE p.client_id = $1 ORDER BY p.created_at DESC', [user.id]);
@@ -145,8 +144,8 @@ async function updateStage(user, id, data) {
 
   const stageNumber = Number(data.stageNumber);
   const status = data.status;
-  if (!Number.isInteger(stageNumber) || stageNumber < 1 || stageNumber > 7) {
-    return json(400, { error: 'stageNumber must be an integer between 1 and 7' });
+  if (!Number.isInteger(stageNumber) || stageNumber < 1 || stageNumber > 6) {
+    return json(400, { error: 'stageNumber must be an integer between 1 and 6' });
   }
   if (!['pending', 'in_progress', 'complete'].includes(status)) {
     return json(400, { error: 'status must be one of pending, in_progress, complete' });
@@ -191,8 +190,8 @@ async function setStageDates(user, id, data) {
   if (!project) return json(404, { error: 'Project not found' });
 
   const stageNumber = Number(data.stageNumber);
-  if (!Number.isInteger(stageNumber) || stageNumber < 1 || stageNumber > 7) {
-    return json(400, { error: 'stageNumber must be an integer between 1 and 7' });
+  if (!Number.isInteger(stageNumber) || stageNumber < 1 || stageNumber > 6) {
+    return json(400, { error: 'stageNumber must be an integer between 1 and 6' });
   }
 
   let startedAt = null;

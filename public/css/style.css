@@ -12,6 +12,15 @@
   --danger: #a8402c;
   --success: #4b7d4f;
   --warn: #a8791f;
+  /* Item-row status tints — deliberately deeper/more saturated than the
+     small status badges, because a whole row needs real colour to read as
+     "this one's done" at a glance. Scheduled stays near-neutral on purpose
+     (nothing has happened yet), so colour intensity itself is the signal:
+     quiet -> amber -> green is a progression, not three equally-loud
+     buckets. */
+  --tint-complete: #a3d18c;
+  --tint-progress: #edb949;
+  --tint-scheduled: #f0e6d4;
   --shadow: 0 1px 2px rgba(34, 26, 16, 0.05), 0 6px 18px rgba(34, 26, 16, 0.06);
   --display-font: ui-serif, Georgia, "Iowan Old Style", "Times New Roman", serif;
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
@@ -334,6 +343,34 @@ main > .section-heading:first-child { margin-top: 0; }
 }
 .group-toggle:hover { color: var(--accent); }
 .group-toggle-arrow { display: inline-block; width: 14px; }
+/* A group heading tints too once every item inside it is done, or amber
+   the moment any item is underway — so scanning the collapsed accordion
+   itself (without opening a single group) already shows what's finished. */
+.breakdown-table-group.status-complete-row td { background: var(--tint-complete); }
+.breakdown-table-group.status-progress-row td { background: var(--tint-progress); }
+.breakdown-table-group.status-complete-row .group-toggle { color: #2f5a33; }
+.breakdown-table-group.status-progress-row .group-toggle { color: #96650e; }
+
+/* Per-item row tinting (see --tint-* above) — a 5px left stripe plus a
+   full-row fill, both keyed off the item's own status rather than the
+   group's, so a lone incomplete item still reads as such inside an
+   otherwise-green group. */
+.breakdown-table tr.item-row td:first-child { border-left: 5px solid transparent; }
+.breakdown-table tr.item-row.tint-scheduled td { background: var(--tint-scheduled); }
+.breakdown-table tr.item-row.tint-in_progress td { background: var(--tint-progress); }
+.breakdown-table tr.item-row.tint-complete td { background: var(--tint-complete); }
+.breakdown-table tr.item-row.tint-scheduled td:first-child { border-left-color: var(--border); }
+.breakdown-table tr.item-row.tint-in_progress td:first-child { border-left-color: #96650e; }
+.breakdown-table tr.item-row.tint-complete td:first-child { border-left-color: #2f5a33; }
+/* Deep fills need deep text — the app's usual muted grey washes out
+   against colour this strong. */
+.breakdown-table tr.item-row.tint-scheduled td,
+.breakdown-table tr.item-row.tint-in_progress td,
+.breakdown-table tr.item-row.tint-complete td { color: #241b0d; }
+.breakdown-table tr.item-row.tint-scheduled .muted,
+.breakdown-table tr.item-row.tint-in_progress .muted,
+.breakdown-table tr.item-row.tint-complete .muted { color: #241b0d; opacity: 0.7; }
+.breakdown-table tr.item-row .badge { background: rgba(255, 255, 255, 0.55); }
 /* align-items: stretch (not flex-start) so every button in the stack
    matches the width of the widest one, instead of each hugging its own
    label and leaving a ragged right edge. */
@@ -363,6 +400,9 @@ main > .section-heading:first-child { margin-top: 0; }
   .breakdown-table td.breakdown-row-actions { display: flex; padding-top: 6px; }
   .breakdown-table-group td { border-radius: 8px; margin: 10px 0 4px; }
   .breakdown-table-group .group-toggle { padding: 10px 8px; }
+  .breakdown-table tr.item-row.tint-scheduled { border-left: 4px solid var(--border); }
+  .breakdown-table tr.item-row.tint-in_progress { border-left: 4px solid #96650e; }
+  .breakdown-table tr.item-row.tint-complete { border-left: 4px solid #2f5a33; }
 }
 
 /* The whole name+dates block is the click target that expands a stage —

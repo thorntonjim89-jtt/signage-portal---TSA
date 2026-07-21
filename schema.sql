@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS projects (
 CREATE TABLE IF NOT EXISTS project_stages (
   id SERIAL PRIMARY KEY,
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  stage_number INTEGER NOT NULL CHECK (stage_number BETWEEN 1 AND 7),
+  stage_number INTEGER NOT NULL CHECK (stage_number BETWEEN 1 AND 6),
   name TEXT NOT NULL,
   status TEXT NOT NULL DEFAULT 'pending' CHECK (status IN ('pending', 'in_progress', 'complete')),
   started_at TIMESTAMPTZ,
@@ -190,7 +190,7 @@ CREATE TABLE IF NOT EXISTS scheduled_work (
   -- falls back to inferring a stage from scheduled_date for those. Every
   -- new item gets an explicit value, so that fallback only ever applies to
   -- pre-migration rows.
-  stage_number INTEGER CHECK (stage_number BETWEEN 1 AND 7),
+  stage_number INTEGER CHECK (stage_number BETWEEN 1 AND 6),
   created_by INTEGER NOT NULL REFERENCES users(id),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -203,7 +203,7 @@ CREATE TABLE IF NOT EXISTS scheduled_work (
 CREATE TABLE IF NOT EXISTS stage_notes (
   id SERIAL PRIMARY KEY,
   project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  stage_number INTEGER NOT NULL CHECK (stage_number BETWEEN 1 AND 7),
+  stage_number INTEGER NOT NULL CHECK (stage_number BETWEEN 1 AND 6),
   entry_date DATE NOT NULL,
   note TEXT NOT NULL,
   created_by INTEGER NOT NULL REFERENCES users(id),

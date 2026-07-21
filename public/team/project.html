@@ -9,6 +9,7 @@
 
   <div class="card">
     <h2>Program</h2>
+    <div id="scheduled-section"></div>
     <ul class="timeline" id="timeline"></ul>
   </div>
 
@@ -97,6 +98,11 @@
   // same reason (a note-add row per stage, always visible, was most of the
   // page's height even for stages with zero notes yet).
   let expandedStageNotes = new Set();
+  // Unlike stages (collapsed by default), the Scheduled section starts open
+  // — its whole purpose is answering "what's coming up" without an extra
+  // click, the same way the per-stage accordion can't without opening every
+  // stage in turn.
+  let scheduledSectionOpen = true;
   // Which sign-type groups are currently expanded, one Set per stage
   // (keyed by stage number, Installed & Complete included like any other
   // stage now that items are scoped by explicit stage_number instead of a
@@ -115,7 +121,7 @@
   // stages that are actually about physical install/QC/shipping work — they
   // looked out of place under Order Confirmed/Design & Proofing/Client
   // Approval, which are about the paperwork side of the project.
-  const INSTALLATION_STAGES = ['Production', 'Quality Check', 'Shipping', 'Installed & Complete'];
+  const INSTALLATION_STAGES = ['Production', 'Shipping', 'Installed & Complete'];
 
   // Photos and scheduled-work items aren't explicitly tagged to a stage, so
   // infer which stage was active on a given date: whichever stage had the
@@ -261,7 +267,43 @@
       </div>`;
   }
 
+  // Cross-stage "what's coming up" view — Program's stage accordion answers
+  // "how is Shipping doing", but not "what happens next across the whole
+  // project" without opening every stage in turn. Flat (not grouped by sign
+  // type, unlike renderGroupedItemsTable) because date order is the whole
+  // point here; no Add Item, since creation stays scoped to whichever
+  // stage's own form is used.
+  function renderScheduledSection() {
+    const el = document.getElementById('scheduled-section');
+    const upcoming = scheduledWorkItems
+      .filter((i) => i.status !== 'complete')
+      .slice()
+      .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+    const isOpen = scheduledSectionOpen;
+    el.innerHTML = `
+      <div class="stage-section scheduled-section">
+        <button type="button" class="stage-section-toggle" id="scheduled-toggle">Scheduled (${upcoming.length}) ${isOpen ? '▾' : '▸'}</button>
+        <div class="${isOpen ? '' : 'hidden'}" id="scheduled-body">
+          ${upcoming.length ? `
+            <div class="breakdown-table-wrap">
+              <table class="breakdown-table">
+                <thead><tr><th>Item</th><th>Done</th><th>Scheduled</th><th>Status</th><th></th></tr></thead>
+                <tbody>${upcoming.map((i) => renderScheduledItemRow(i, { showStage: true })).join('')}</tbody>
+              </table>
+            </div>` : '<p class="muted" style="margin:0;">Nothing scheduled.</p>'}
+        </div>
+      </div>`;
+
+    wireFileLinks(el);
+    wireScheduledItemEvents(el);
+    el.querySelector('#scheduled-toggle').addEventListener('click', () => {
+      scheduledSectionOpen = !scheduledSectionOpen;
+      renderScheduledSection();
+    });
+  }
+
   function renderTimeline() {
+    renderScheduledSection();
     document.getElementById('timeline').innerHTML = stages.map((s) => `
       <li class="${s.status}">
         <div class="timeline-row">
@@ -722,12 +764,17 @@
     });
   }
 
-  function renderScheduledItemRow(i) {
+  // opts.showStage labels which Program stage the item belongs to — only
+  // needed in the cross-stage Scheduled section, where that's not implicit
+  // from which accordion panel the row happens to be sitting in.
+  function renderScheduledItemRow(i, opts = {}) {
     const { tag, title } = splitSignType(i.description);
+    const stage = opts.showStage ? stages.find((s) => s.stage_number === stageNumberFor(i, stages)) : null;
     return `
-      <tr>
+      <tr class="item-row tint-${i.status}">
         <td>
           ${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}
+          ${stage ? `<div class="muted">${escapeHtml(stage.name)}</div>` : ''}
           ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
         </td>
         <td data-label="Done">${i.completed_quantity}/${i.quantity}</td>
@@ -763,8 +810,9 @@
       const total = groupItems.reduce((sum, i) => sum + (i.quantity || 1), 0);
       const complete = groupItems.reduce((sum, i) => sum + (i.completed_quantity || 0), 0);
       const isOpen = expandedTags.has(tag);
+      const groupStatus = complete >= total ? 'complete' : complete > 0 ? 'progress' : 'scheduled';
       const headerRow = `
-        <tr class="breakdown-table-group">
+        <tr class="breakdown-table-group status-${groupStatus}-row">
           <td colspan="5">
             <button type="button" class="group-toggle" data-toggle-group="${escapeHtml(tag)}">
               <span class="group-toggle-arrow">${isOpen ? '▾' : '▸'}</span>

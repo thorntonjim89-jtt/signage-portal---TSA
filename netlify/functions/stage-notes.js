@@ -41,8 +41,8 @@ async function createStageNote(user, event) {
 
   const { projectId, note } = data;
   const stageNumber = Number(data.stageNumber);
-  if (!projectId || !Number.isInteger(stageNumber) || stageNumber < 1 || stageNumber > 7) {
-    return json(400, { error: 'projectId and a stageNumber between 1 and 7 are required' });
+  if (!projectId || !Number.isInteger(stageNumber) || stageNumber < 1 || stageNumber > 6) {
+    return json(400, { error: 'projectId and a stageNumber between 1 and 6 are required' });
   }
   if (!note || !note.trim()) return json(400, { error: 'note is required' });
   const entryDate = data.entryDate || new Date().toISOString().slice(0, 10);

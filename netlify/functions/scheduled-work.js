@@ -5,7 +5,7 @@ const COLUMNS = 'id, project_id, description, quantity, completed_quantity, note
 
 function parseStageNumber(value) {
   const n = Number(value);
-  return Number.isInteger(n) && n >= 1 && n <= 7 ? n : null;
+  return Number.isInteger(n) && n >= 1 && n <= 6 ? n : null;
 }
 
 // Only client and team see scheduled work — a supplier's own project view
@@ -74,7 +74,7 @@ async function createScheduledWork(user, event) {
   const quantity = data.quantity === undefined ? 1 : parseQuantity(data.quantity);
   if (quantity === null) return json(400, { error: 'quantity must be a whole number of 1 or more' });
   const stageNumber = parseStageNumber(data.stageNumber);
-  if (stageNumber === null) return json(400, { error: 'stageNumber must be a whole number between 1 and 7' });
+  if (stageNumber === null) return json(400, { error: 'stageNumber must be a whole number between 1 and 6' });
 
   const project = await assertProjectAccess(user, projectId);
   if (!project) return json(403, { error: 'Forbidden' });
@@ -109,7 +109,7 @@ async function updateScheduledWork(user, id, data) {
       return json(400, { error: 'scheduledDate must be a valid date' });
     }
     const stageNumber = parseStageNumber(data.stageNumber);
-    if (stageNumber === null) return json(400, { error: 'stageNumber must be a whole number between 1 and 7' });
+    if (stageNumber === null) return json(400, { error: 'stageNumber must be a whole number between 1 and 6' });
     const status = statusFor(completedQuantity, quantity);
     let completed = null;
     if (status === 'complete') {
