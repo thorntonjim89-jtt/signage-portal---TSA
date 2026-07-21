@@ -1,60 +1,6 @@
 const { getPool } = require('./utils/db');
 const { getUserFromEvent, json, withErrorHandling } = require('./utils/auth');
 
-// Ground truth for the ATO Sydney job, taken from the client's own
-// Manufacturing & Installation Tracker (not the architect's design pack —
-// the tracker reflects what was actually manufactured, including
-// exclusions and later variations, which the original design intent
-// doesn't capture). Quantity `null` means "don't touch": either the
-// tracker has no confirmed count yet (a variation still being priced) or
-// the item is excluded/on hold/superseded, so any scheduled_work row that
-// matches it is one of the team's ad-hoc "extras" and must stay as-is.
-//
-// `occurrences` handles the tracker listing the same line twice (e.g. two
-// separate ID11 spares deliveries) — that many scheduled_work rows will be
-// matched and each gets `quantity`, oldest id first. If more rows match
-// than the tracker has occurrences, none of them are touched — that's an
-// ambiguity for a human to resolve, not a guess worth making automatically.
-const TRACKER_ITEMS = [
-  { code: 'id02', keywords: ['stairwell'], quantity: 8 },
-  { code: 'id06', keywords: ['minor', 'room'], quantity: 37 },
-  { code: 'id07', keywords: ['major', 'room'], quantity: 87 },
-  { code: 'id11', keywords: ['ses', 'office'], quantity: 46 },
-  { code: 'id11', keywords: ['spare'], quantity: 5, occurrences: 2 },
-  { code: 'id11', keywords: ['sav', 'return'], quantity: null }, // variation, qty TBC
-  { code: 'in01', keywords: ['ceiling', 'hung'], quantity: 31 },
-  { code: 'in01', keywords: ['ceiling', 'support'], quantity: 31 },
-  { code: 'st02', keywords: ['hearing', 'option a'], quantity: 4 },
-  { code: 'st02', keywords: ['hearing', 'option b'], quantity: 4 },
-  { code: 'dr02', keywords: ['lobby', 'signage'], quantity: 1 },
-  { code: 'dr02', keywords: ['lobby', 'joinery'], quantity: 1 },
-  { code: 'rr', keywords: ['restroom', 'tactile'], quantity: 25 },
-  { code: 'rp', keywords: ['restroom', 'paddle'], quantity: 24, occurrences: 2 },
-  { code: 'wp', keywords: ['wall', 'paddle'], quantity: 4 },
-  { code: 'ps', keywords: ['a4', 'pocket'], quantity: 34 },
-  { code: 'ps', keywords: ['a3', 'pocket'], quantity: 16 },
-  { code: 'nb1', keywords: ['notice', 'board'], quantity: 8 },
-  { code: 'pm01', keywords: ['workplace', 'joinery'], quantity: 1 },
-  { code: null, keywords: ['remake', 'ccv'], quantity: 28 },
-  { code: 'us001', keywords: ['emergency', 'door'], quantity: 18 },
-  { code: 'us002', keywords: ['collection', 'point'], quantity: 8 },
-  { code: 'us003', keywords: ['security', 'notice'], quantity: 30 },
-  { code: 'us004', keywords: ['trespassing'], quantity: 30 },
-  { code: 'us005', keywords: ['unauthorised', 'entry'], quantity: 30 },
-  { code: 'us006', keywords: ['tailgating'], quantity: 30 }, // merged US006/US007 sign
-  { code: 'us008', keywords: ['restricted', 'area'], quantity: 5 },
-  { code: 'us009', keywords: ['recording'], quantity: 5 },
-  { code: 'us010', keywords: ['leave', 'bags'], quantity: 1 },
-  { code: 'us011', keywords: ['devices', 'cameras'], quantity: 1 },
-  // Excluded / on hold / removed / superseded in the tracker — never touch:
-  { code: 'us006', keywords: ['door hold'], quantity: null },
-  { code: 'us007', keywords: [], quantity: null },
-  { code: 'fp01', keywords: [], quantity: null },
-  { code: 'wa01', keywords: [], quantity: null },
-  { code: 'aed', keywords: [], quantity: null },
-  { code: 'fd01', keywords: [], quantity: null },
-];
-
 function normalize(text) {
   return String(text || '')
     .toLowerCase()
@@ -64,55 +10,82 @@ function normalize(text) {
     .trim();
 }
 
-// Matches a scheduled_work row's description against a tracker item: the
-// leading sign-type code must agree (when the tracker item specifies one),
-// and every keyword phrase must appear somewhere in the description.
-function matchesItem(normalizedDescription, item) {
-  if (item.code && !normalizedDescription.startsWith(item.code)) return false;
-  return item.keywords.every((kw) => normalizedDescription.includes(kw));
+// Generic enough words that matching on them alone would pair up unrelated
+// rows (nearly every sign is "signage" and gets "installed"). Deliberately
+// NOT stripping single-letter words like "a"/"b" — that's exactly what
+// distinguishes "Hearing Assistance Option A" from "...Option B", and a
+// pure-noise single letter is harmless to keep (it just doesn't help or
+// hurt any other pairing).
+const STOPWORDS = new Set([
+  'the', 'and', 'or', 'of', 'to', 'for', 'on', 'in', 'at',
+  'install', 'installation', 'installed', 'supply', 'signage', 'sign', 'signs',
+  'panel', 'panels', 'ref', 'reference', 'quantity',
+]);
+
+// `code`, when known, is excluded from the word list — it's already
+// enforced separately as a hard gate below, so leaving it in here would let
+// two rows that merely share a code (e.g. "ID11 - SES Office ID" and
+// "ID11 - Spares" — same code, nothing else in common) trivially score 1
+// on the code token alone and pass as a "match" with zero real content
+// overlap.
+function significantWords(normalized, code) {
+  const codeNorm = code ? code.toLowerCase() : null;
+  return normalized.split(' ').filter((w) => w.length > 0 && !STOPWORDS.has(w) && w !== codeNorm);
 }
 
-async function planBackfill(client, projectId) {
-  const result = await client.query(
-    'SELECT id, description, quantity FROM scheduled_work WHERE project_id = $1 ORDER BY id ASC',
-    [projectId]
-  );
-  const rows = result.rows.map((r) => ({ ...r, normalized: normalize(r.description) }));
+// Both the tracker's own labels ("ID02 - stairwell level ID") and this
+// app's scheduled_work descriptions ("ID02 — stairwell level ID") lead with
+// a short all-caps/alnum sign-type code — a plain word like "Remake" never
+// matches this shape, so it's a safe, cheap first-pass anchor without
+// needing a hand-maintained list of real codes.
+function leadingCode(rawText) {
+  const firstToken = String(rawText || '').trim().split(/\s+/)[0] || '';
+  return /^[A-Z0-9]{2,8}$/.test(firstToken) ? firstToken : null;
+}
+
+// Matches each tracker row (already extracted from the uploaded file by
+// upload-finalize.js) to at most one scheduled_work row: a leading code
+// must agree when both sides have one (cheap, high-confidence), then the
+// candidate with the most shared significant words wins. Ties are broken
+// by lowest id rather than rejected outright — the tracker routinely
+// repeats the exact same line twice (two separate ID11 spares deliveries,
+// two identical restroom paddle rows), and those really are
+// interchangeable: whichever tied candidate this row claims, the other
+// tracker row with the same wording will claim whatever's left on its own
+// turn. A row that still finds no positive-scoring candidate at all is
+// left untouched — the caller can always reach that item's real Edit form
+// to sort it out by hand.
+function matchTrackerToProject(scheduledRows, trackerRows) {
+  const pool = scheduledRows.map((r) => {
+    const code = leadingCode(r.description);
+    return { ...r, code, words: significantWords(normalize(r.description), code) };
+  });
   const claimed = new Set();
   const changes = [];
 
-  // A row that matches more than one tracker item (e.g. a description that
-  // mentions both "A4" and "A3" pocket signs, combining two line items into
-  // one already-adjusted row) can't be attributed to either with confidence
-  // — silently picking the first match would risk clobbering a value a
-  // person already reviewed. Those rows are excluded up front rather than
-  // resolved by match order.
-  const itemsByRow = new Map();
-  for (const row of rows) {
-    const matchingItems = TRACKER_ITEMS.filter((item) => item.quantity !== null && matchesItem(row.normalized, item));
-    if (matchingItems.length === 1) itemsByRow.set(row.id, matchingItems[0]);
-  }
+  for (const item of trackerRows) {
+    const itemCode = leadingCode(item.label);
+    const itemWords = significantWords(normalize(item.label), itemCode);
 
-  for (const item of TRACKER_ITEMS) {
-    if (item.quantity === null) continue; // deliberately left alone
-    const occurrences = item.occurrences || 1;
-    const matches = rows.filter((r) => !claimed.has(r.id) && itemsByRow.get(r.id) === item);
-    if (matches.length !== occurrences) continue; // ambiguous or no match — skip, don't guess
-    for (const row of matches) {
-      claimed.add(row.id);
-      if (row.quantity !== item.quantity) {
-        changes.push({
-          id: row.id,
-          description: row.description,
-          oldQuantity: row.quantity,
-          newQuantity: item.quantity,
-        });
+    const candidates = pool.filter((r) => !claimed.has(r.id) && (!itemCode || !r.code || itemCode === r.code));
+    let best = null;
+    let bestScore = 0;
+    for (const c of candidates) {
+      const score = c.words.filter((w) => itemWords.includes(w)).length;
+      if (score > bestScore || (score === bestScore && score > 0 && best && c.id < best.id)) {
+        best = c;
+        bestScore = score;
       }
+    }
+    if (!best || bestScore === 0) continue;
+
+    claimed.add(best.id);
+    if (best.quantity !== item.quantity) {
+      changes.push({ id: best.id, description: best.description, oldQuantity: best.quantity, newQuantity: item.quantity });
     }
   }
 
-  const untouched = rows.filter((r) => !claimed.has(r.id)).length;
-  return { changes, matchedRows: claimed.size, untouchedRows: untouched, totalRows: rows.length };
+  return { changes, matchedRows: claimed.size, untouchedRows: scheduledRows.length - claimed.size, totalRows: scheduledRows.length };
 }
 
 exports.handler = withErrorHandling(async (event) => {
@@ -137,7 +110,27 @@ exports.handler = withErrorHandling(async (event) => {
     const projectResult = await client.query('SELECT id FROM projects WHERE id = $1', [projectId]);
     if (!projectResult.rows.length) return json(404, { error: 'Project not found' });
 
-    const plan = await planBackfill(client, projectId);
+    let plan;
+    if (apply) {
+      // Re-uses the change list the preview step already computed and the
+      // team member already reviewed, rather than re-matching — the
+      // uploaded file isn't guaranteed to still be around by the time
+      // Apply is clicked.
+      const { changes } = data;
+      if (!Array.isArray(changes)) return json(400, { error: 'changes is required to apply' });
+      plan = { changes, matchedRows: 0, untouchedRows: 0, totalRows: 0 };
+    } else {
+      // trackerItems is already parsed out of the uploaded .xlsx by
+      // upload-finalize.js (kind: 'tracker') — this endpoint only matches
+      // it against the project, it never touches the raw file.
+      const { trackerItems } = data;
+      if (!Array.isArray(trackerItems)) return json(400, { error: 'trackerItems is required for a preview' });
+      const result = await client.query(
+        'SELECT id, description, quantity FROM scheduled_work WHERE project_id = $1 ORDER BY id ASC',
+        [projectId]
+      );
+      plan = matchTrackerToProject(result.rows, trackerItems);
+    }
 
     if (apply && plan.changes.length) {
       await client.query('BEGIN');
@@ -158,8 +151,8 @@ exports.handler = withErrorHandling(async (event) => {
                    ELSE 'in_progress'
                  END,
                  completed_at = CASE WHEN LEAST(completed_quantity, $1) >= $1 THEN completed_at ELSE NULL END
-             WHERE id = $2`,
-            [change.newQuantity, change.id]
+             WHERE id = $2 AND project_id = $3`,
+            [change.newQuantity, change.id, projectId]
           );
         }
         await client.query('COMMIT');
