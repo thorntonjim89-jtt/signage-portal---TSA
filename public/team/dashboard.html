@@ -145,7 +145,7 @@
       <a class="item-card" href="/team/project.html?id=${p.id}">
         <div>
           <div class="title">${escapeHtml(p.title)}</div>
-          <div class="meta">Stage ${p.current_stage} of 7</div>
+          <div class="meta">Stage ${p.current_stage} of 6</div>
         </div>
         <span class="badge ${p.status}">${p.status === 'complete' ? 'Complete' : 'In progress'}</span>
       </a>`).join('') : `<p class="muted">${allProjects.length ? 'No projects match.' : 'No projects yet.'}</p>`;

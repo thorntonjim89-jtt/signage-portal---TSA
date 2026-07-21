@@ -110,9 +110,9 @@ Environment variables) before deploying.
    computes `client_price = cost * (1 + markup / 100)`.
 4. **Client** accepts or declines the priced quote.
 5. **Team** converts an accepted quote into a **project**
-   (`POST /api/projects`), which seeds a 7-stage timeline: Order Confirmed →
-   Design & Proofing → Client Approval → Production → Quality Check →
-   Shipping → Installed & Complete.
+   (`POST /api/projects`), which seeds a 6-stage timeline: Order Confirmed →
+   Design & Proofing → Client Approval → Production → Shipping →
+   Installed & Complete.
 6. Team advances stages, uploads progress photos, and both team and client
    can post to a per-project Q&A thread.
 

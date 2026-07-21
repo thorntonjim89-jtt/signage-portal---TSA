@@ -9,6 +9,7 @@
 
   <div class="card">
     <h2>Program</h2>
+    <div id="scheduled-section"></div>
     <ul class="timeline" id="timeline"></ul>
   </div>
 
@@ -76,12 +77,15 @@
   let expandedStages = new Set();
   // Which stages' dated-notes log is expanded.
   let expandedStageNotes = new Set();
+  // Unlike stages (collapsed by default), the Scheduled section starts open
+  // — see the matching comment in team/project.html.
+  let scheduledSectionOpen = true;
 
   // Photos are installation-site evidence, so only surface them under the
   // stages that are actually about physical install/QC/shipping work — they
   // looked out of place under Order Confirmed/Design & Proofing/Client
   // Approval, which are about the paperwork side of the project.
-  const INSTALLATION_STAGES = ['Production', 'Quality Check', 'Shipping', 'Installed & Complete'];
+  const INSTALLATION_STAGES = ['Production', 'Shipping', 'Installed & Complete'];
 
   // Photos and scheduled-work items aren't explicitly tagged to a stage, so
   // infer which stage was active on a given date: whichever stage had the
@@ -178,10 +182,60 @@
     renderProjectTimeline();
   }
 
+  // Read-only counterpart to team's cross-stage "what's coming up" view —
+  // see the matching comment in team/project.html.
+  function renderScheduledSection() {
+    const el = document.getElementById('scheduled-section');
+    const upcoming = scheduledWorkItems
+      .filter((i) => i.status !== 'complete')
+      .slice()
+      .sort((a, b) => new Date(a.scheduled_date) - new Date(b.scheduled_date));
+    const isOpen = scheduledSectionOpen;
+    el.innerHTML = `
+      <div class="stage-section scheduled-section">
+        <button type="button" class="stage-section-toggle" id="scheduled-toggle">Scheduled (${upcoming.length}) ${isOpen ? '▾' : '▸'}</button>
+        <div class="${isOpen ? '' : 'hidden'}" id="scheduled-body">
+          ${upcoming.length ? `
+            <div class="breakdown-table-wrap">
+              <table class="breakdown-table">
+                <thead><tr><th>Item</th><th>Done</th><th>Scheduled</th><th>Status</th></tr></thead>
+                <tbody>${upcoming.map(renderUpcomingItemRow).join('')}</tbody>
+              </table>
+            </div>` : '<p class="muted" style="margin:0;">Nothing scheduled.</p>'}
+        </div>
+      </div>`;
+    el.querySelector('#scheduled-toggle').addEventListener('click', () => {
+      scheduledSectionOpen = !scheduledSectionOpen;
+      renderScheduledSection();
+    });
+  }
+
+  // Distinct from renderScheduledItemRow (used inside a single stage's own
+  // table, which has no reason to repeat that stage's name) — this row is
+  // shown across every stage at once, so it labels which one each item
+  // belongs to, and keeps the Scheduled-date column that per-stage tables
+  // leave out as redundant with "which stage this is".
+  function renderUpcomingItemRow(i) {
+    const { tag, title } = splitSignType(i.description);
+    const stage = stages.find((s) => s.stage_number === stageNumberFor(i, stages));
+    return `
+      <tr class="item-row tint-${i.status}">
+        <td>
+          ${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}
+          ${stage ? `<div class="muted">${escapeHtml(stage.name)}</div>` : ''}
+          ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
+        </td>
+        <td data-label="Done">${i.completed_quantity}/${i.quantity}</td>
+        <td data-label="Scheduled">${fmtScheduledDate(i.scheduled_date)}</td>
+        <td data-label="Status"><span class="badge ${i.status}">${i.status.replace('_', ' ')}</span></td>
+      </tr>`;
+  }
+
   // Separated from loadProject so a group-toggle or stage-expand click
   // (pure UI state, no new data) can re-render locally instead of
   // re-fetching over the network.
   function renderProjectTimeline() {
+    renderScheduledSection();
     document.getElementById('timeline').innerHTML = stages.map((s) => `
       <li class="${s.status}">
         <div class="timeline-row">
@@ -271,7 +325,7 @@
   function renderScheduledItemRow(i) {
     const { tag, title } = splitSignType(i.description);
     return `
-      <tr>
+      <tr class="item-row tint-${i.status}">
         <td>
           ${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}
           ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
@@ -299,8 +353,9 @@
       const total = groupItems.reduce((sum, i) => sum + (i.quantity || 1), 0);
       const complete = groupItems.reduce((sum, i) => sum + (i.completed_quantity || 0), 0);
       const isOpen = expandedTags.has(tag);
+      const groupStatus = complete >= total ? 'complete' : complete > 0 ? 'progress' : 'scheduled';
       const headerRow = `
-        <tr class="breakdown-table-group">
+        <tr class="breakdown-table-group status-${groupStatus}-row">
           <td colspan="3">
             <button type="button" class="group-toggle" data-toggle-group="${escapeHtml(tag)}">
               <span class="group-toggle-arrow">${isOpen ? '▾' : '▸'}</span>
