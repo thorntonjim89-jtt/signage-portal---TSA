@@ -881,6 +881,28 @@
     scheduledWorkItems = items;
   }
 
+  // Tracker Sync only ever corrects quantity — it can't safely rewrite a
+  // description (that's free text a person wrote, not something to guess
+  // at). So a preview line showing stale wording (e.g. leftover "pending
+  // artwork sign-off") has no automatic fix; the line needs an escape
+  // hatch straight to that item's own Edit Item form instead of leaving
+  // the preview as a dead end.
+  function jumpToScheduledItem(itemId) {
+    const item = scheduledWorkItems.find((i) => i.id === itemId);
+    if (!item) return;
+    const stageNumber = stageNumberFor(item, stages);
+    if (stageNumber == null) return;
+    const tag = splitSignType(item.description).tag || 'Other';
+    getStageExpandedTags(stageNumber).add(tag);
+    expandedStages.add(stageNumber);
+    renderTimeline();
+    const row = document.querySelector('[data-work-dates-target="' + itemId + '"]');
+    if (row) {
+      row.classList.remove('hidden');
+      row.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }
+
   function renderBackfillResult(plan) {
     const el = document.getElementById('backfill-result');
     if (!plan.changes.length) {
@@ -888,7 +910,7 @@
       return;
     }
     const rows = plan.changes
-      .map((c) => `<li>${escapeHtml(c.description)} — <strong>${c.oldQuantity} &rarr; ${c.newQuantity}</strong></li>`)
+      .map((c) => `<li>${escapeHtml(c.description)} — <strong>${c.oldQuantity} &rarr; ${c.newQuantity}</strong> <button type="button" class="work-dates-toggle" data-jump-item="${c.id}">Edit item</button></li>`)
       .join('');
     const applyBtn = plan.applied
       ? '<p class="muted">Applied.</p>'
@@ -898,6 +920,9 @@
       <ul>${rows}</ul>
       ${applyBtn}
     `;
+    el.querySelectorAll('button[data-jump-item]').forEach((btn) => {
+      btn.addEventListener('click', () => jumpToScheduledItem(Number(btn.dataset.jumpItem)));
+    });
     if (!plan.applied) {
       document.getElementById('backfill-apply-btn').addEventListener('click', async () => {
         const btn = document.getElementById('backfill-apply-btn');
