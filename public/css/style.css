@@ -242,7 +242,7 @@ table th { color: var(--muted); font-weight: 600; font-size: 12px; text-transfor
 .list-item .badge { margin-top: 2px; }
 .list-item:last-child { border-bottom: none; }
 .list-item .title { font-weight: 600; }
-.list-item .meta { font-size: 13px; color: var(--muted); }
+.list-item .meta { font-size: 13px; color: var(--muted); margin-top: 3px; }
 .list-item-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 /* Buttons sitting next to each other in an action row read as a matched
    set when they share a width floor — "Start" next to "Complete" (or
@@ -550,7 +550,13 @@ main > .section-heading:first-child { margin-top: 0; }
 .qna-msg .meta { font-size: 12px; color: var(--muted); margin-bottom: 2px; }
 
 .issue-item { flex-direction: column; align-items: stretch; }
-.issue-item-header { display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; row-gap: 10px; gap: 14px; width: 100%; }
+/* Always stack the title/meta block above the badge+actions row, rather
+   than letting them sit side by side whenever a short description leaves
+   room — that made short issues cram the badge and three buttons right up
+   against the text, while only longer descriptions (which forced a wrap)
+   got a row to themselves. Same layout for every issue regardless of how
+   long its description happens to be. */
+.issue-item-header { display: flex; flex-direction: column; align-items: stretch; gap: 10px; width: 100%; }
 .issue-responses { margin: 10px 0 0; padding-left: 14px; border-left: 2px solid var(--border); display: flex; flex-direction: column; gap: 8px; }
 .issue-response { font-size: 13px; }
 .issue-response .meta { color: var(--muted); margin-bottom: 2px; }
