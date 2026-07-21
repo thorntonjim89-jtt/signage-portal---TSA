@@ -38,11 +38,14 @@
       <div class="breakdown-group" style="margin-top:16px;">
         <div class="breakdown-group-header">Backfill quantities from tracker</div>
         <p class="muted" style="margin-top:0;">
-          Matches item descriptions against the client's Manufacturing &amp; Installation Tracker and corrects
-          quantities to the confirmed counts. Anything it can't confidently match (variations, extras your team
-          added, ambiguous duplicates) is left untouched.
+          Upload the client's Manufacturing &amp; Installation Tracker (.xlsx) and this matches its rows against
+          scheduled items to correct quantities to the confirmed counts. Always re-upload the current tracker —
+          nothing here is remembered between runs. Anything it can't confidently match (variations, extras your
+          team added, ambiguous duplicates) is left untouched.
         </p>
-        <button class="btn secondary" type="button" id="backfill-preview-btn">Preview changes</button>
+        <label>Tracker file<input type="file" id="tracker-file-input" accept=".xlsx"></label>
+        <div class="actions"><button class="btn secondary" type="button" id="backfill-preview-btn">Preview changes</button></div>
+        <div class="error hidden" id="backfill-error"></div>
         <div id="backfill-result" style="margin-top:12px;"></div>
       </div>
     </div>
@@ -928,7 +931,11 @@
         const btn = document.getElementById('backfill-apply-btn');
         btn.disabled = true;
         try {
-          const applied = await api('/backfill-quantities', { method: 'POST', body: { projectId, apply: true } });
+          // Sends back the exact change list the preview already computed
+          // (and the team member already reviewed) rather than re-parsing
+          // the file — nothing keeps the file input populated by the time
+          // Apply gets clicked.
+          const applied = await api('/backfill-quantities', { method: 'POST', body: { projectId, apply: true, changes: plan.changes } });
           renderBackfillResult(applied);
           await loadScheduledWork();
           renderTimeline();
@@ -942,12 +949,33 @@
 
   document.getElementById('backfill-preview-btn').addEventListener('click', async () => {
     const btn = document.getElementById('backfill-preview-btn');
+    const errorEl = document.getElementById('backfill-error');
+    errorEl.classList.add('hidden');
+    const file = document.getElementById('tracker-file-input').files[0];
+    if (!file) {
+      errorEl.textContent = 'Choose the tracker file first.';
+      errorEl.classList.remove('hidden');
+      return;
+    }
+    if (fileTooLarge(file)) {
+      errorEl.textContent = `"${file.name}" is larger than 50MB — that doesn't look like a tracker spreadsheet.`;
+      errorEl.classList.remove('hidden');
+      return;
+    }
     btn.disabled = true;
     try {
-      const plan = await api('/backfill-quantities', { method: 'POST', body: { projectId, apply: false } });
+      // Tracker files can be several MB (embedded formatting, etc.) — well
+      // past what fits in one function request, so this goes through the
+      // same chunked upload every other file in the app uses. Nothing gets
+      // stored: upload-finalize.js parses it (kind: 'tracker') and hands
+      // back just the extracted rows, which is all backfill-quantities.js
+      // ever needs.
+      const { items } = await uploadFileInChunks(file, { kind: 'tracker' });
+      const plan = await api('/backfill-quantities', { method: 'POST', body: { projectId, apply: false, trackerItems: items } });
       renderBackfillResult(plan);
     } catch (err) {
-      alert(err.message);
+      errorEl.textContent = err.message;
+      errorEl.classList.remove('hidden');
     } finally {
       btn.disabled = false;
     }

@@ -1,5 +1,6 @@
 const { query } = require('./utils/db');
 const { getUserFromEvent, json, withErrorHandling } = require('./utils/auth');
+const { parseTrackerBuffer } = require('./utils/tracker');
 
 async function assertProjectAccess(user, projectId) {
   const result = await query('SELECT * FROM projects WHERE id = $1', [projectId]);
@@ -74,12 +75,28 @@ exports.handler = withErrorHandling(async (event) => {
   }
 
   const { uploadId, kind } = data;
-  if (!uploadId || !['photo', 'quote-file', 'issue-photo', 'issue-response-photo', 'design-pack', 'project-document'].includes(kind)) {
+  if (!uploadId || !['photo', 'quote-file', 'issue-photo', 'issue-response-photo', 'design-pack', 'project-document', 'tracker'].includes(kind)) {
     return json(400, { error: 'uploadId and a valid kind are required' });
   }
 
   const { buffer, error } = await assembleChunks(uploadId, user);
   if (error) return error;
+
+  if (kind === 'tracker') {
+    // Nothing to persist here — the tracker file itself isn't kept, only
+    // the rows extracted from it, which the caller immediately hands to
+    // backfill-quantities.js for matching against a specific project.
+    if (user.role !== 'team') return json(403, { error: 'Only team can upload a tracker' });
+    let items;
+    try {
+      items = await parseTrackerBuffer(buffer);
+    } catch {
+      await cleanupChunks(uploadId);
+      return json(400, { error: 'Could not read that file as an Excel spreadsheet' });
+    }
+    await cleanupChunks(uploadId);
+    return json(200, { items });
+  }
 
   if (kind === 'photo') {
     const { projectId, contentType, caption, takenAt } = data;
