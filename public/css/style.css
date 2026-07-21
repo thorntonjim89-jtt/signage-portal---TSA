@@ -401,17 +401,23 @@ main > .section-heading:first-child { margin-top: 0; }
   cursor: pointer;
 }
 .stage-section-toggle:hover { background: var(--bg); color: var(--accent-dark); }
+/* Same bordered-pill treatment as .stage-section-toggle, for the same
+   reason — this sits stacked between Mark Complete and Delete (both full
+   buttons), and a bare text link there reads as a stray label rather than
+   an equally-real third action. */
 .work-dates-toggle {
-  display: block;
-  background: none;
-  border: none;
-  padding: 0;
+  display: inline-block;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 5px 12px;
   font-size: 12px;
   font-weight: 600;
   color: var(--accent);
   cursor: pointer;
+  text-align: center;
 }
-.work-dates-toggle:hover { color: var(--accent-dark); }
+.work-dates-toggle:hover { background: var(--bg); color: var(--accent-dark); }
 /* Everything inside an expanded stage — items, photos, design pack, notes,
    dates — one collapsible body per stage instead of the always-open block
    every stage used to render regardless of whether it had been opened. */
