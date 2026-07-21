@@ -15,7 +15,7 @@
   <div class="card">
     <div class="tab-bar" id="tab-bar">
       <button class="tab-btn active" data-tab="photos">Photos</button>
-      <button class="tab-btn" data-tab="scheduled-work">Scheduled Work</button>
+      <button class="tab-btn" data-tab="scheduled-work">Tracker Sync</button>
       <button class="tab-btn" data-tab="documents">Documents</button>
       <button class="tab-btn" data-tab="issues">Issues</button>
       <button class="tab-btn" data-tab="qna">Q&amp;A</button>
@@ -34,7 +34,7 @@
     </div>
 
     <div class="tab-panel hidden" data-panel="scheduled-work">
-      <p class="muted" style="margin-top:0;">To add a new item, open the relevant stage's <strong>Details</strong> panel in Program above — that's where new items get tagged to a stage.</p>
+      <p class="muted" style="margin-top:0;">Scheduled work items live in <strong>Program</strong> above, under whichever stage they belong to — expand a stage to view, add, or edit its items. This tab is just for bulk-correcting quantities against the tracker.</p>
       <div class="breakdown-group" style="margin-top:16px;">
         <div class="breakdown-group-header">Backfill quantities from tracker</div>
         <p class="muted" style="margin-top:0;">
@@ -45,11 +45,6 @@
         <button class="btn secondary" type="button" id="backfill-preview-btn">Preview changes</button>
         <div id="backfill-result" style="margin-top:12px;"></div>
       </div>
-      <div class="tab-bar" id="scheduled-work-subtabs" style="margin-top:16px;">
-        <button class="tab-btn active" data-subtab="upcoming">Upcoming</button>
-        <button class="tab-btn" data-subtab="completed">Completed</button>
-      </div>
-      <div id="scheduled-work-list" class="muted">Loading…</div>
     </div>
 
     <div class="tab-panel hidden" data-panel="documents">
@@ -88,18 +83,23 @@
   let stages = [];
   let scheduledWorkItems = [];
   let stageNotes = [];
-  // Which stage's Details panel is currently open, if any — renderTimeline()
-  // rebuilds the whole list from scratch on every change (same as the
-  // breakdown table), so without tracking this, editing an item from inside
-  // an open Details panel would silently collapse it back to empty.
-  let expandedStageDetail = null;
-  // Which sign-type groups are currently expanded, per table — Installed &
-  // Complete's own table, and one Set per other stage (keyed by stage
-  // number) since the same tag could plausibly appear under more than one
-  // stage's Details and shouldn't share expand state. Persisted the same
-  // way as expandedStageDetail, for the same reason: a re-render must not
-  // silently collapse something the user just opened.
-  let installedCompleteExpandedTags = new Set();
+  // Which stages are currently expanded — every stage collapses to just its
+  // header row by default (name, dates, status, Start/Complete) so the whole
+  // Program list is scannable at a glance instead of one long scroll of
+  // every stage's notes/items/dates all rendered open at once. A Set (not a
+  // single value) so more than one stage can be open at a time for cross-
+  // referencing, e.g. comparing Production against Shipping side by side.
+  let expandedStages = new Set();
+  // Which stages' dated-notes log is expanded — collapsed by default for the
+  // same reason (a note-add row per stage, always visible, was most of the
+  // page's height even for stages with zero notes yet).
+  let expandedStageNotes = new Set();
+  // Which sign-type groups are currently expanded, one Set per stage
+  // (keyed by stage number, Installed & Complete included like any other
+  // stage now that items are scoped by explicit stage_number instead of a
+  // separate always-on aggregate). Persisted the same way as expandedStages,
+  // for the same reason: a re-render must not silently collapse something
+  // the user just opened.
   let stageItemExpandedTags = new Map();
   function getStageExpandedTags(stageNumber) {
     if (!stageItemExpandedTags.has(stageNumber)) stageItemExpandedTags.set(stageNumber, new Set());
@@ -226,7 +226,7 @@
   // might have a dispatch date, a customs date, and an arrival date, each
   // worth a note). This is a running log team can add to freely, distinct
   // from the stage's own start/complete dates.
-  function renderStageNotes(stageNumber) {
+  function renderStageNotesLog(stageNumber) {
     const notes = stageNotes.filter((n) => n.stage_number === stageNumber);
     const todayValue = new Date().toISOString().slice(0, 10);
     return `
@@ -245,47 +245,47 @@
       </div>`;
   }
 
+  // Collapsed by default, behind a "Notes (N) ▾" toggle — an always-open
+  // note-add row on every one of the 7 stages, even ones with zero notes,
+  // was most of the Program list's height on its own.
+  function renderStageNotesSection(stageNumber) {
+    const count = stageNotes.filter((n) => n.stage_number === stageNumber).length;
+    const isOpen = expandedStageNotes.has(stageNumber);
+    return `
+      <div class="stage-section">
+        <button type="button" class="stage-section-toggle" data-notes-toggle="${stageNumber}">Notes (${count}) ${isOpen ? '▾' : '▸'}</button>
+        <div class="${isOpen ? '' : 'hidden'}" id="stage-notes-body-${stageNumber}">${renderStageNotesLog(stageNumber)}</div>
+      </div>`;
+  }
+
   function renderTimeline() {
-    document.getElementById('timeline').innerHTML = stages.map((s) => {
-      const isInstalledComplete = s.name === 'Installed & Complete';
-      return `
+    document.getElementById('timeline').innerHTML = stages.map((s) => `
       <li class="${s.status}">
         <div class="timeline-row">
           <span class="dot">${s.status === 'complete' ? '✓' : s.stage_number}</span>
-          <div class="timeline-info">
-            <strong>${escapeHtml(s.name)}</strong>
-            <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
-            ${renderStageNotes(s.stage_number)}
-            <div class="stage-links">
-              <button type="button" class="stage-detail-toggle" data-stage="${s.stage_number}">Details ${expandedStageDetail === s.stage_number ? '▴' : '▾'}</button>
-              <button type="button" class="stage-dates-toggle" data-stage="${s.stage_number}">${isInstalledComplete ? 'Edit Stage Dates (all items)' : 'Edit Dates'}</button>
+          <button type="button" class="stage-header" data-stage-toggle="${s.stage_number}">
+            <div class="timeline-info">
+              <strong>${escapeHtml(s.name)}</strong>
+              <div class="meta">${s.completed_at ? '📅 Completed ' + fmtDateShort(s.completed_at) : s.started_at ? '📅 Started ' + fmtDateShort(s.started_at) : ''}</div>
             </div>
-            <div class="stage-detail${expandedStageDetail === s.stage_number ? '' : ' hidden'}" id="stage-detail-${s.stage_number}"></div>
-            <div class="stage-dates-form hidden" id="stage-dates-${s.stage_number}">
-              ${isInstalledComplete ? '<p class="muted" style="margin:0 0 8px;">This sets the stage\'s own overall dates, not any individual item\'s — edit a specific item directly in the table below.</p>' : ''}
-              <form data-dates-stage="${s.stage_number}">
-                <label>Started<input type="date" name="startedAt" value="${toDateInputValue(s.started_at)}"></label>
-                <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(s.completed_at)}"></label>
-                <div class="actions"><button class="btn secondary" type="submit">Save Dates</button></div>
-                <p class="muted" style="margin:4px 0 0;">Clear both to reset this stage to pending.</p>
-                <div class="error hidden" id="stage-dates-error-${s.stage_number}"></div>
-              </form>
-            </div>
-          </div>
+            <span class="stage-expand-arrow">${expandedStages.has(s.stage_number) ? '▾' : '▸'}</span>
+          </button>
           <span class="badge ${s.status}">${s.status.replace('_', ' ')}</span>
           <div class="stage-actions">
             ${s.status !== 'in_progress' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="in_progress">Start</button>` : ''}
             ${s.status !== 'complete' ? `<button class="btn secondary" data-stage="${s.stage_number}" data-status="complete">Complete</button>` : ''}
           </div>
         </div>
-        ${isInstalledComplete ? `<div id="installed-complete-table">${renderGroupedItemsTable(scheduledWorkItems, installedCompleteExpandedTags)}</div><div id="installed-complete-add-item">${renderAddItemForm(s.stage_number)}</div>` : ''}
-      </li>`;
-    }).join('');
+        <div class="stage-body${expandedStages.has(s.stage_number) ? '' : ' hidden'}" id="stage-body-${s.stage_number}"></div>
+      </li>`).join('');
 
-    if (expandedStageDetail) {
-      const detailEl = document.getElementById('stage-detail-' + expandedStageDetail);
-      if (detailEl) renderStageDetail(expandedStageDetail, detailEl);
-    }
+    // Every expanded stage gets its body rendered fresh from current data —
+    // more than one can be open at once (a Set, not a single value) so
+    // cross-referencing two stages side by side actually works.
+    expandedStages.forEach((stageNumber) => {
+      const el = document.getElementById('stage-body-' + stageNumber);
+      if (el) renderStageBody(stageNumber, el);
+    });
 
     // Stage Start/Complete buttons (data-stage) and per-item Mark
     // Complete/Reopen buttons (data-id, wired below via
@@ -302,120 +302,37 @@
       });
     });
 
-    document.querySelectorAll('.stage-detail-toggle').forEach((btn) => {
+    document.querySelectorAll('.stage-header').forEach((btn) => {
       btn.addEventListener('click', () => {
-        const stageNumber = Number(btn.dataset.stage);
-        const detailEl = document.getElementById('stage-detail-' + stageNumber);
-        const isHidden = detailEl.classList.contains('hidden');
+        const stageNumber = Number(btn.dataset.stageToggle);
+        const bodyEl = document.getElementById('stage-body-' + stageNumber);
+        const isHidden = bodyEl.classList.contains('hidden');
         if (isHidden) {
-          renderStageDetail(stageNumber, detailEl);
-          expandedStageDetail = stageNumber;
+          expandedStages.add(stageNumber);
+          renderStageBody(stageNumber, bodyEl);
         } else {
-          expandedStageDetail = null;
+          expandedStages.delete(stageNumber);
         }
-        detailEl.classList.toggle('hidden', !isHidden);
-        btn.textContent = isHidden ? 'Details ▴' : 'Details ▾';
-      });
-    });
-
-    document.querySelectorAll('.stage-dates-toggle').forEach((btn) => {
-      btn.addEventListener('click', () => {
-        document.getElementById('stage-dates-' + btn.dataset.stage).classList.toggle('hidden');
-      });
-    });
-
-    document.querySelectorAll('form[data-note-stage]').forEach((form) => {
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const fd = new FormData(form);
-        try {
-          await api('/stage-notes', {
-            method: 'POST',
-            body: {
-              projectId,
-              stageNumber: Number(form.dataset.noteStage),
-              entryDate: fd.get('entryDate'),
-              note: fd.get('note'),
-            },
-          });
-          await loadStageNotes();
-          renderTimeline();
-        } catch (err) {
-          alert(err.message);
-        }
-      });
-    });
-
-    document.querySelectorAll('button[data-delete-note]').forEach((btn) => {
-      btn.addEventListener('click', async () => {
-        if (!confirm('Delete this note?')) return;
-        await api('/stage-notes/' + btn.dataset.deleteNote, { method: 'DELETE' });
-        await loadStageNotes();
-        renderTimeline();
-      });
-    });
-
-    // Wires Mark Complete/Reopen, Delete, and Edit Item for every row in
-    // the Installed & Complete breakdown table — since the whole timeline
-    // is rebuilt fresh on every change, there's no separate expand-and-
-    // repopulate step, so an edit is reflected immediately. Deliberately
-    // scoped to just this table's own container rather than the whole
-    // #timeline: a stage's Details panel (elsewhere in #timeline, wired
-    // separately inside renderStageDetail) can show the exact same item at
-    // the same time, and a wider scope here would both double-wire that
-    // panel's own copy and make its data-work-dates-target lookups
-    // ambiguous between the two occurrences.
-    const installedCompleteTable = document.getElementById('installed-complete-table');
-    if (installedCompleteTable) {
-      wireScheduledItemEvents(installedCompleteTable);
-      wireGroupToggles(installedCompleteTable, installedCompleteExpandedTags, renderTimeline);
-    }
-    const installedCompleteAddItem = document.getElementById('installed-complete-add-item');
-    if (installedCompleteAddItem) {
-      const installedCompleteStage = stages.find((st) => st.name === 'Installed & Complete');
-      wireAddItemForm(installedCompleteAddItem, installedCompleteStage.stage_number, renderTimeline);
-    }
-
-    document.querySelectorAll('form[data-dates-stage]').forEach((form) => {
-      form.addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const stageNumber = Number(form.dataset.datesStage);
-        const fd = new FormData(form);
-        const errorEl = document.getElementById('stage-dates-error-' + stageNumber);
-        errorEl.classList.add('hidden');
-        try {
-          await api('/projects/' + projectId, {
-            method: 'PATCH',
-            body: {
-              action: 'setStageDates',
-              stageNumber,
-              startedAt: fd.get('startedAt') || null,
-              completedAt: fd.get('completedAt') || null,
-            },
-          });
-          await loadProject();
-        } catch (err) {
-          errorEl.textContent = err.message;
-          errorEl.classList.remove('hidden');
-        }
+        bodyEl.classList.toggle('hidden', !isHidden);
+        btn.querySelector('.stage-expand-arrow').textContent = isHidden ? '▾' : '▸';
       });
     });
   }
 
-  function renderStageDetail(stageNumber, el) {
+  // Everything about one stage once it's expanded — items (scoped to this
+  // stage's explicit stage_number, same as every other stage now, including
+  // Installed & Complete), photos, design pack, the notes log, and its own
+  // start/complete dates. One function instead of splitting "always shown"
+  // vs "shown behind Details" the way earlier rounds did — that split is
+  // exactly what caused items to double up between a stage's own view and
+  // an always-on Installed & Complete aggregate of literally everything.
+  function renderStageBody(stageNumber, el) {
     const stage = stages.find((s) => s.stage_number === stageNumber);
-    // Installed & Complete already has its own authoritative item list and
-    // its own Add Item form (the always-visible sign-type breakdown right
-    // under the stage row, showing every item regardless of stage) — this
-    // stage's Details only covers photos. Every other stage uses the same
-    // editable table plus its own Add Item form, scoped to whichever items
-    // are explicitly tagged to it.
-    const itemsHtml = stage.name === 'Installed & Complete'
-      ? ''
-      : renderGroupedItemsTable(
-          scheduledWorkItems.filter((i) => stageNumberFor(i, stages) === stageNumber),
-          getStageExpandedTags(stageNumber)
-        ) + renderAddItemForm(stageNumber);
+
+    const itemsHtml = renderGroupedItemsTable(
+      scheduledWorkItems.filter((i) => stageNumberFor(i, stages) === stageNumber),
+      getStageExpandedTags(stageNumber)
+    ) + renderAddItemForm(stageNumber);
 
     let photoHtml = '';
     if (INSTALLATION_STAGES.includes(stage.name)) {
@@ -450,27 +367,105 @@
         </div>`;
     }
 
-    el.innerHTML = (photoHtml || itemsHtml || designPackHtml)
-      ? `${designPackHtml}${photoHtml}${itemsHtml}`
-      : '<p class="muted" style="margin:10px 0 0;">Nothing logged during this stage yet.</p>';
+    const notesHtml = renderStageNotesSection(stageNumber);
+
+    const datesHtml = `
+      <div class="stage-section">
+        <button type="button" class="stage-section-toggle" data-stage="${stageNumber}">Edit Dates</button>
+        <div class="stage-dates-form hidden" id="stage-dates-${stageNumber}">
+          <form data-dates-stage="${stageNumber}">
+            <label>Started<input type="date" name="startedAt" value="${toDateInputValue(stage.started_at)}"></label>
+            <label>Completed<input type="date" name="completedAt" value="${toDateInputValue(stage.completed_at)}"></label>
+            <div class="actions"><button class="btn secondary" type="submit">Save Dates</button></div>
+            <p class="muted" style="margin:4px 0 0;">Clear both to reset this stage to pending.</p>
+            <div class="error hidden" id="stage-dates-error-${stageNumber}"></div>
+          </form>
+        </div>
+      </div>`;
+
+    el.innerHTML = `${designPackHtml}${photoHtml}${itemsHtml}${notesHtml}${datesHtml}`;
+
     wireFileLinks(el);
-    // Scoped to this stage's own detail panel — see the note in
-    // wireScheduledItemEvents about why a narrow scope matters here: the
-    // same item can also be sitting in the Installed & Complete table
-    // elsewhere in #timeline at the same time.
+    // Scoped to this stage's own body, not the whole #timeline — another
+    // expanded stage can be showing at the same time (multiple stages can
+    // be open together now), and a wider lookup would be ambiguous about
+    // which copy of a shared id is being edited.
     wireScheduledItemEvents(el);
-    // Local re-render (not the whole renderTimeline) — toggling a group is
-    // pure UI state, not a data change, and this panel doesn't depend on
-    // anything else on the page.
-    wireGroupToggles(el, getStageExpandedTags(stageNumber), () => renderStageDetail(stageNumber, el));
-    wireAddItemForm(el, stageNumber, () => renderStageDetail(stageNumber, el));
+    // Local re-renders (not the whole renderTimeline) — none of these are
+    // page-wide data changes, so there's no reason to also rebuild every
+    // other expanded stage along with them.
+    wireGroupToggles(el, getStageExpandedTags(stageNumber), () => renderStageBody(stageNumber, el));
+    wireAddItemForm(el, stageNumber, () => renderStageBody(stageNumber, el));
+
+    el.querySelector('[data-notes-toggle]').addEventListener('click', () => {
+      if (expandedStageNotes.has(stageNumber)) expandedStageNotes.delete(stageNumber);
+      else expandedStageNotes.add(stageNumber);
+      renderStageBody(stageNumber, el);
+    });
+
+    el.querySelectorAll('form[data-note-stage]').forEach((form) => {
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const fd = new FormData(form);
+        try {
+          await api('/stage-notes', {
+            method: 'POST',
+            body: {
+              projectId,
+              stageNumber,
+              entryDate: fd.get('entryDate'),
+              note: fd.get('note'),
+            },
+          });
+          await loadStageNotes();
+          renderStageBody(stageNumber, el);
+        } catch (err) {
+          alert(err.message);
+        }
+      });
+    });
+
+    el.querySelectorAll('button[data-delete-note]').forEach((btn) => {
+      btn.addEventListener('click', async () => {
+        if (!confirm('Delete this note?')) return;
+        await api('/stage-notes/' + btn.dataset.deleteNote, { method: 'DELETE' });
+        await loadStageNotes();
+        renderStageBody(stageNumber, el);
+      });
+    });
+
+    el.querySelector('.stage-section-toggle[data-stage]').addEventListener('click', () => {
+      document.getElementById('stage-dates-' + stageNumber).classList.toggle('hidden');
+    });
+
+    el.querySelector('form[data-dates-stage]').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const errorEl = document.getElementById('stage-dates-error-' + stageNumber);
+      errorEl.classList.add('hidden');
+      try {
+        await api('/projects/' + projectId, {
+          method: 'PATCH',
+          body: {
+            action: 'setStageDates',
+            stageNumber,
+            startedAt: fd.get('startedAt') || null,
+            completedAt: fd.get('completedAt') || null,
+          },
+        });
+        await loadProject();
+      } catch (err) {
+        errorEl.textContent = err.message;
+        errorEl.classList.remove('hidden');
+      }
+    });
 
     el.querySelectorAll('button[data-delete-pack]').forEach((btn) => {
       btn.addEventListener('click', async () => {
         if (!confirm('Delete this design pack file? This cannot be undone.')) return;
         await api('/design-packs/' + btn.dataset.deletePack, { method: 'DELETE' });
         await loadDesignPacks();
-        renderStageDetail(stageNumber, el);
+        renderStageBody(stageNumber, el);
       });
     });
 
@@ -495,7 +490,7 @@
             contentType: file.type || 'application/octet-stream',
           });
           await loadDesignPacks();
-          renderStageDetail(stageNumber, el);
+          renderStageBody(stageNumber, el);
         } catch (err) {
           errorEl.textContent = err.message;
           errorEl.classList.remove('hidden');
@@ -661,8 +656,6 @@
     return match ? { tag: match[1], title: match[2] } : { tag: null, title: description };
   }
 
-  // Shared by the card view (Scheduled Work tab) and the table view
-  // (Timeline breakdown) so the two surfaces edit the exact same fields.
   function renderEditItemForm(i) {
     const currentStage = stageNumberFor(i, stages);
     return `
@@ -726,28 +719,6 @@
     });
   }
 
-  function renderScheduledItem(i) {
-    const { tag, title } = splitSignType(i.description);
-    const stage = stages.find((s) => s.stage_number === stageNumberFor(i, stages));
-    return `
-      <div class="list-item issue-item">
-        <div class="issue-item-header">
-          <div>
-            <div class="title">${tag ? `<span class="tag">${escapeHtml(tag)}</span>` : ''}${escapeHtml(title)}${i.quantity > 1 ? ` <span class="qty-badge">&times;${i.quantity}</span>` : ''}</div>
-            <div class="meta">${stage ? escapeHtml(stage.name) + ' &middot; ' : ''}${i.completed_quantity}/${i.quantity} installed &middot; Scheduled ${fmtScheduledDate(i.scheduled_date)}${i.completed_at ? ' &middot; Completed ' + fmtDateShort(i.completed_at) : ''}</div>
-            ${i.notes ? `<div class="item-notes">📝 ${escapeHtml(i.notes)}</div>` : ''}
-            <button type="button" class="work-dates-toggle" data-work-dates="${i.id}">Edit Item</button>
-          </div>
-          <div class="list-item-actions">
-            <span class="badge ${i.status}">${i.status.replace('_', ' ')}</span>
-            <button class="btn secondary" data-id="${i.id}" data-status="${i.status === 'complete' ? 'scheduled' : 'complete'}">${i.status === 'complete' ? 'Reopen' : 'Mark Complete'}</button>
-            <button class="btn danger" data-delete-id="${i.id}">Delete</button>
-          </div>
-        </div>
-        <div class="stage-dates-form hidden" data-work-dates-target="${i.id}">${renderEditItemForm(i)}</div>
-      </div>`;
-  }
-
   function renderScheduledItemRow(i) {
     const { tag, title } = splitSignType(i.description);
     return `
@@ -771,12 +742,11 @@
   }
 
   // Groups items by sign type with a collapsible header per group, instead
-  // of always showing every row — a project with a lot of scheduled work
-  // (Installed & Complete shows literally everything) turns into a wall of
-  // rows otherwise. Expand state is owned by the caller and persisted
-  // across re-renders (see installedCompleteExpandedTags /
-  // stageItemExpandedTags), so collapsing/expanding — or editing an item
-  // inside an expanded group — never resets what's currently open.
+  // of always showing every row — a stage with a lot of scheduled work
+  // turns into a wall of rows otherwise. Expand state is owned by the
+  // caller and persisted across re-renders (see stageItemExpandedTags), so
+  // collapsing/expanding — or editing an item inside an expanded group —
+  // never resets what's currently open.
   function renderGroupedItemsTable(items, expandedTags) {
     if (!items.length) return '';
     const groups = new Map();
@@ -825,10 +795,9 @@
     });
   }
 
-  // Shared between the Scheduled Work tab's list and the Timeline's
-  // per-sign-type breakdown expansion — both render items with
-  // renderScheduledItem() and need the same Mark Complete/Reopen, Delete,
-  // and Edit Dates behavior wired up.
+  // Wires Mark Complete/Reopen, Delete, and Edit Item for every item row
+  // rendered by renderScheduledItemRow, scoped to whichever stage body
+  // container is passed in.
   function wireScheduledItemEvents(el) {
     // [data-id] excludes the timeline's stage Start/Complete buttons, which
     // also carry data-status but key off data-stage instead — both kinds
@@ -850,12 +819,10 @@
       });
     });
 
-    // Scoped to el (not document.getElementById) because the same item can
-    // legitimately appear twice at once — once in a stage's own Details
-    // panel (date-inferred) and once in the Installed & Complete breakdown
-    // (tag-grouped, shows every item regardless of date) — a global id
-    // lookup would silently grab whichever copy happens to be first in the
-    // document instead of the one actually being edited.
+    // Scoped to el (not document.getElementById) because more than one
+    // stage body can be expanded and rendered at once now — each item only
+    // ever belongs to one stage, but keeping every lookup scoped to its own
+    // container avoids relying on that staying true forever.
     el.querySelectorAll('button[data-work-dates]').forEach((btn) => {
       btn.addEventListener('click', () => {
         el.querySelector('[data-work-dates-target="' + btn.dataset.workDates + '"]').classList.toggle('hidden');
@@ -907,37 +874,11 @@
     });
   }
 
-  let scheduledWorkSubtab = 'upcoming';
-
-  function renderScheduledWorkList() {
-    const el = document.getElementById('scheduled-work-list');
-    el.classList.remove('muted');
-    if (!scheduledWorkItems.length) {
-      el.innerHTML = '<p class="muted">No scheduled work yet.</p>';
-      return;
-    }
-    const items = scheduledWorkItems.filter((i) =>
-      scheduledWorkSubtab === 'upcoming' ? i.status !== 'complete' : i.status === 'complete'
-    );
-    el.innerHTML = items.length
-      ? items.map(renderScheduledItem).join('')
-      : `<p class="muted">${scheduledWorkSubtab === 'upcoming' ? 'Nothing scheduled.' : 'Nothing completed yet.'}</p>`;
-    wireScheduledItemEvents(el);
-  }
-
-  document.querySelectorAll('#scheduled-work-subtabs .tab-btn').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      document.querySelectorAll('#scheduled-work-subtabs .tab-btn').forEach((b) => b.classList.remove('active'));
-      btn.classList.add('active');
-      scheduledWorkSubtab = btn.dataset.subtab;
-      renderScheduledWorkList();
-    });
-  });
-
+  // Items live only in Program now (see renderStageBody) — this just keeps
+  // scheduledWorkItems current for whichever stage bodies are expanded.
   async function loadScheduledWork() {
     const { items } = await api('/scheduled-work?projectId=' + projectId);
     scheduledWorkItems = items;
-    renderScheduledWorkList();
   }
 
   function renderBackfillResult(plan) {

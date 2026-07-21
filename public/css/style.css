@@ -365,11 +365,31 @@ main > .section-heading:first-child { margin-top: 0; }
   .breakdown-table-group .group-toggle { padding: 10px 8px; }
 }
 
-.stage-links { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+/* The whole name+dates block is the click target that expands a stage —
+   a plain <button> reset to look like the text it wraps, so the entire row
+   is a target instead of a small separate "Details" link next to it. */
+.stage-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  flex: 1 1 200px;
+  min-width: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+}
+.stage-header:hover strong { color: var(--accent-dark); }
+.stage-expand-arrow { flex: 0 0 auto; color: var(--muted); font-size: 13px; margin-top: 3px; }
 /* A bare text link next to a full-size Start/Complete button read as an
    afterthought — a small bordered pill gives it enough visual weight to
    look like an intentional second control, not a stray label. */
-.stage-detail-toggle, .stage-dates-toggle {
+.stage-section-toggle {
   display: inline-block;
   background: var(--card);
   border: 1px solid var(--border);
@@ -380,7 +400,7 @@ main > .section-heading:first-child { margin-top: 0; }
   color: var(--accent);
   cursor: pointer;
 }
-.stage-detail-toggle:hover, .stage-dates-toggle:hover { background: var(--bg); color: var(--accent-dark); }
+.stage-section-toggle:hover { background: var(--bg); color: var(--accent-dark); }
 .work-dates-toggle {
   display: block;
   background: none;
@@ -392,9 +412,14 @@ main > .section-heading:first-child { margin-top: 0; }
   cursor: pointer;
 }
 .work-dates-toggle:hover { color: var(--accent-dark); }
-.stage-detail { margin-top: 10px; }
-.stage-detail .photo-grid { margin-bottom: 10px; }
-.stage-detail .list-item { padding: 9px 0; }
+/* Everything inside an expanded stage — items, photos, design pack, notes,
+   dates — one collapsible body per stage instead of the always-open block
+   every stage used to render regardless of whether it had been opened. */
+.stage-body { margin-top: 10px; }
+.stage-body .photo-grid { margin-bottom: 10px; }
+.stage-body .list-item { padding: 9px 0; }
+.stage-section { margin-top: 14px; }
+.stage-section:first-child { margin-top: 0; }
 .stage-dates-form { margin-top: 10px; padding: 10px; background: var(--bg); border-radius: 10px; max-width: 320px; }
 .stage-dates-form form { display: flex; flex-direction: column; gap: 8px; }
 .stage-dates-form label { font-size: 12px; }
